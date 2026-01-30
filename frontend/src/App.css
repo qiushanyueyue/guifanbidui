@@ -100,6 +100,7 @@ h2 {
   background: var(--input-bg);
   color: #333;
   min-height: 120px;
+  box-sizing: border-box;
 }
 
 .input-section textarea:focus {

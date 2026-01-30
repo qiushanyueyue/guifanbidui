@@ -20,7 +20,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
     const [fullDetail, setFullDetail] = useState<StandardDetail | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [redirectUrl, setRedirectUrl] = useState<string>('');
-    const [isRedirecting, setIsRedirecting] = useState(false);
+
 
     useEffect(() => {
         if (isOpen && detail) {
@@ -38,11 +38,9 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                 // If NO URL (Search Mode), generate redirect URL via backend
                 const keyword = detail.name || detail.code || '';
                 if (keyword) {
-                    setIsRedirecting(true);
                     api.getCsresRedirectUrl(keyword)
                         .then(url => setRedirectUrl(url))
-                        .catch(err => console.error("Failed to get redirect url", err))
-                        .finally(() => setIsRedirecting(false));
+                        .catch(err => console.error("Failed to get redirect url", err));
                 }
             }
         }

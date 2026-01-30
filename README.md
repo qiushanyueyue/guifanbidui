@@ -51,8 +51,4 @@ GEMINI_API_KEY=your_gemini_key
 DEEPSEEK_API_KEY=your_deepseek_key
 ```
 
-## 部署 (Deployment)
 
-本项目支持 Vercel 部署。
-
-![部署状态](screenshot2.png)
