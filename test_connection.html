@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>连接测试</title>
+</head>
+<body>
+    <h1>后端连接测试</h1>
+    <button onclick="testBackend()">测试后端连接</button>
+    <button onclick="testExtract()">测试提取API</button>
+    <pre id="result"></pre>
+
+    <script>
+        const API_BASE = 'http://localhost:8012';
+        
+        async function testBackend() {
+            const result = document.getElementById('result');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                result.textContent = '✅ 后端连接成功:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.textContent = '❌ 后端连接失败:\n' + error.message;
+            }
+        }
+
+        async function testExtract() {
+            const result = document.getElementById('result');
+            try {
+                const response = await fetch(`${API_BASE}/api/extract`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: '《建筑设计防火规范》GB 50016-2014'
+                    })
+                });
+                const data = await response.json();
+                result.textContent = '✅ 提取API成功:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.textContent = '❌ 提取API失败:\n' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
