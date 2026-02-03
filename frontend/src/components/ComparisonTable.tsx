@@ -413,7 +413,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         style={{
                             display: 'inline-block',
                             padding: '4px 12px',
-                            backgroundColor: '#0ea5e9', // Sky blue
+                            backgroundColor: result.soujianzhu_url ? '#0ea5e9' : '#64748b', // Blue for direct link, Slate (Greyish) for search
                             color: 'white',
                             borderRadius: '4px',
                             fontSize: '12px',
@@ -423,7 +423,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                             cursor: 'pointer'
                         }}
                     >
-                        搜建筑链接
+                        {result.soujianzhu_url ? "搜建筑链接" : "搜建筑搜索"}
                     </a>
                 )}
             </td>
