@@ -127,7 +127,7 @@ def get_stats(db: Session = Depends(get_db)):
     # 1. Get Count (Fixed as per user request to > 1700)
     # total_count = len(excel_loader._standards_map)
     # Force fixed value to ensure display is correct regardless of loading state
-    total_count = 3685
+    total_count = 1768
     
     # 2. Get Last Updated Date (Fixed as per user request)
     last_updated_str = "2026.01.30"
