@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+requests
+python-dotenv
+pandas
+openpyxl
+google-generativeai
+sqlalchemy
+beautifulsoup4
+jinja2
+python-multipart
+xlsxwriter
