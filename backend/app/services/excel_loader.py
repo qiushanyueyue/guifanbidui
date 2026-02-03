@@ -176,6 +176,31 @@ class ExcelLoader:
         normalized_query = self._normalize_name(name)
         return self._name_map.get(normalized_query)
 
+    def search_fuzzy(self, name: str) -> Optional[dict]:
+        """
+        Fuzzy search for Soujianzhu links.
+        Returns match if:
+        1. Query name is contained in Standard name
+        2. Standard name is contained in Query name
+        """
+        if not name or len(name) < 2:
+            return None
+            
+        normalized_query = self._normalize_name(name)
+        
+        # Iterate all unique standards
+        # (This is O(N) but N ~3700 is negligible for Python)
+        for std in self._standards_map.values():
+            std_name = std.get("name", "")
+            if not std_name: continue
+            
+            norm_std_name = self._normalize_name(std_name)
+            
+            if normalized_query in norm_std_name or norm_std_name in normalized_query:
+                return std
+                
+        return None
+
     def _inject_manual_data(self):
         """Inject manually provided standards that are missing from Excel"""
         manual_entries = [
