@@ -223,21 +223,21 @@ class ExcelLoader:
                 "code": "GB 50352-2019",
                 "full_content": "民用建筑设计统一标准 GB 50352-2019",
                 "source": "manual",
-                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormList.aspx?Key=GB%2050352-2019"
+                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormContent.aspx?id=386"
             },
             {
                 "name": "无障碍设计规范",
                 "code": "GB 50763-2012",
                 "full_content": "无障碍设计规范 GB 50763-2012",
                 "source": "manual",
-                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormList.aspx?Key=GB%2050763-2012"
+                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormContent.aspx?id=212"
             },
             {
                 "name": "办公建筑设计标准",
                 "code": "JGJ/T 67-2019",
                 "full_content": "办公建筑设计标准 JGJ/T 67-2019",
                 "source": "manual",
-                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormList.aspx?Key=JGJ%2FT%2067-2019"
+                "soujianzhu_url": "https://www.soujianzhu.cn/NormAndRules/NormContent.aspx?id=402"
             }
         ]
         

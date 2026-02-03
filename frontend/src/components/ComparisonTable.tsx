@@ -402,11 +402,11 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                 )}
             </td>
 
-            {/* 搜建筑链接 - New Column */}
+            {/* 搜建筑链接 - Updated Logic */}
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
-                {result && result.soujianzhu_url && (
+                {result && (
                     <a
-                        href={result.soujianzhu_url}
+                        href={result.soujianzhu_url || `https://www.soujianzhu.cn/Search/SouGuifan.aspx?skey=${encodeURIComponent(result.name)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn-link"
