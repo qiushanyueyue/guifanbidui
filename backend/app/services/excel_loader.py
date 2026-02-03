@@ -28,8 +28,17 @@ class ExcelLoader:
             # Check backend directory (if running from root)
             elif os.path.exists(os.path.join("backend", local_path)):
                  path_to_load = os.path.join("backend", local_path)
+            # Vercel deployment structure: File might be in the root or parallel
+            elif os.path.exists(os.path.join(os.getcwd(), local_path)):
+                path_to_load = os.path.join(os.getcwd(), local_path)
             else:
                 path_to_load = file_path if file_path else volume_path
+            
+            # Log the resolved path
+            try:
+                logger.info(f"Resolved Excel path: {path_to_load} (CWD: {os.getcwd()})")
+            except:
+                pass
             
             cls._instance.load_data(path_to_load)
         return cls._instance
