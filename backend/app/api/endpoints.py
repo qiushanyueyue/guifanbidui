@@ -115,14 +115,32 @@ def get_stats(db: Session = Depends(get_db)):
     """
     获取数据库统计信息
     """
-    total_count = db.query(StandardModel).count()
-    last_updated = db.query(StandardModel.last_updated).order_by(StandardModel.last_updated.desc()).first()
+    # Source stats from the Excel loader instead of the local DB (which is often empty/ephemeral)
+    from app.services.excel_loader import excel_loader
+    import os
+    import datetime
     
-    last_updated_str = ""
-    if last_updated and last_updated[0]:
-        last_updated_str = last_updated[0].strftime("%Y-%m-%d")
-    else:
-        last_updated_str = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    # 1. Get Count
+    total_count = len(excel_loader._standards_map)
+    
+    # 2. Get Last Updated Date from file
+    # Re-resolve the path logic briefly to find the file
+    local_path = "standards_data.xlsx"
+    backend_path = os.path.join("backend", "standards_data.xlsx") # For vercel root
+    cwd_path = os.path.join(os.getcwd(), "standards_data.xlsx")
+    
+    target_file = None
+    if os.path.exists(local_path):
+        target_file = local_path
+    elif os.path.exists(backend_path):
+        target_file = backend_path
+    elif os.path.exists(cwd_path):
+        target_file = cwd_path
+        
+    last_updated_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    if target_file and os.path.exists(target_file):
+        mtime = os.path.getmtime(target_file)
+        last_updated_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y.%m.%d")
         
     return {
         "count": total_count,
