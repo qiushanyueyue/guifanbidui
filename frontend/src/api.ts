@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8012/api';
+const API_BASE_URL = '/api';
 
 export interface StandardInfo {
     code: string;
