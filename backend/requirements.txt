@@ -3,7 +3,9 @@ uvicorn
 pydantic
 requests
 python-dotenv
-pandas
+pydantic
+requests
+python-dotenv
 openpyxl
 google-generativeai
 sqlalchemy

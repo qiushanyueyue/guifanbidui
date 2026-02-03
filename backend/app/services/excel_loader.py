@@ -1,6 +1,7 @@
-import pandas as pd
+import openpyxl
 import re
 from typing import Optional, Dict
+import os
 import logging
 
 # Configure logging
@@ -21,7 +22,6 @@ class ExcelLoader:
             local_path = "standards_data.xlsx" 
             volume_path = "/Volumes/yue/Download/规范目录库（含网址）.xlsx"
             
-            import os
             # Check current directory
             if os.path.exists(local_path):
                 path_to_load = local_path
@@ -45,21 +45,32 @@ class ExcelLoader:
 
     def load_data(self, file_path: str):
         try:
-            logger.info(f"Loading standards from Excel: {file_path}")
-            df = pd.read_excel(file_path)
+            logger.info(f"Loading standards from Excel (using openpyxl): {file_path}")
+            
+            # Load workbook using openpyxl
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            ws = wb.active
+            
+            # Get headers
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+            
+            # Map headers to indices
+            header_map = {str(h).strip(): i for i, h in enumerate(headers) if h}
             
             # Check for new format columns
-            if '名称' in df.columns and '网址' in df.columns:
-                self._load_new_format(df)
-            elif '规范名称及编号' in df.columns:
-                self._load_old_format(df)
+            if '名称' in header_map and '网址' in header_map:
+                self._load_new_format(ws, header_map)
+            elif '规范名称及编号' in header_map:
+                self._load_old_format(ws, header_map)
             else:
-                logger.error("Unknown Excel format: columns not found")
+                logger.error(f"Unknown Excel format: columns not found. Headers: {headers}")
                 
             logger.info(f"Loaded {len(self._standards_map)} codes and {len(self._name_map)} names from Excel.")
             
             # Inject manual overrides
             self._inject_manual_data()
+            
+            wb.close()
             
         except Exception as e:
             logger.error(f"Failed to load Excel file: {e}")
@@ -67,10 +78,16 @@ class ExcelLoader:
             # Inject manual overrides even if Excel fails
             self._inject_manual_data()
 
-    def _load_new_format(self, df):
-        for _, row in df.iterrows():
-            content = row['名称']
-            url = row['网址']
+    def _load_new_format(self, ws, header_map):
+        name_idx = header_map.get('名称')
+        url_idx = header_map.get('网址')
+        
+        # Iterate from row 2
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row: continue
+            
+            content = row[name_idx]
+            url = row[url_idx] if url_idx < len(row) else None
             
             if not isinstance(content, str):
                 continue
@@ -82,9 +99,6 @@ class ExcelLoader:
             if name_match:
                 name = name_match.group(1).strip()
                 # Code typically follows the closing bracket
-                # But sometimes content is "Prefix,《Name》Code"
-                # Let's try to extract code from the whole string or just the part after?
-                # Usually code is at the end or after name.
                 
                 # Heuristic: Find pattern matching code in the whole string
                 code_match = re.search(r"([A-Z/]{2,}\s*[A-Z]?\s*\d+(?:\.\d+)?-\d{4})", content)
@@ -106,9 +120,13 @@ class ExcelLoader:
                     norm_name = self._normalize_name(name)
                     self._name_map[norm_name] = entry
 
-    def _load_old_format(self, df):
-        for _, row in df.iterrows():
-            content = row['规范名称及编号']
+    def _load_old_format(self, ws, header_map):
+        col_idx = header_map.get('规范名称及编号')
+        
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row: continue
+            
+            content = row[col_idx]
             if not isinstance(content, str):
                 continue
             
@@ -132,12 +150,14 @@ class ExcelLoader:
 
     def _normalize_code(self, code: str) -> str:
         """Remove spaces and convert to uppercase for consistent lookups"""
-        return re.sub(r"\s+", "", code).upper()
+        if not code: return ""
+        return re.sub(r"\s+", "", str(code)).upper()
 
     def _normalize_name(self, name: str) -> str:
         """Remove spaces for consistent name lookups"""
+        if not name: return ""
         # First clean the name of artifacts like (共二册)
-        clean = self._clean_name_text(name)
+        clean = self._clean_name_text(str(name))
         return re.sub(r"\s+", "", clean).strip()
 
     def _clean_name_text(self, name: str) -> str:
