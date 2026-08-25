@@ -49,6 +49,19 @@ body {
   -webkit-text-fill-color: initial;
 }
 
+.app-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--primary-color);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .app-header p {
   font-size: 0.9rem;
   color: var(--text-secondary);
@@ -109,6 +122,55 @@ h2 {
   box-shadow: 0 0 0 2px rgba(250, 173, 20, 0.1);
 }
 
+.input-heading,
+.results-header,
+.results-actions,
+.results-toolbar,
+.button-group {
+  display: flex;
+  align-items: center;
+}
+
+.input-heading,
+.results-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.input-heading h2,
+.results-header h2 {
+  margin-bottom: 0;
+}
+
+.example-button {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--primary-color);
+}
+
+.button-group {
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.button-group .btn-primary {
+  min-width: 160px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .input-actions {
   display: flex;
   gap: 10px;
@@ -128,6 +190,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 44px;
 }
 
 .btn-primary {
@@ -176,10 +239,50 @@ button {
 }
 
 /* Table Styling */
+.results-header {
+  margin-bottom: 16px;
+}
+
+.dataset-status,
+.results-summary {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.dataset-status {
+  margin-top: 6px;
+}
+
+.results-actions,
+.results-toolbar {
+  gap: 8px;
+}
+
+.results-toolbar {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.results-summary {
+  margin-left: auto;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  min-width: 1180px;
 }
 
 thead th {
@@ -189,6 +292,9 @@ thead th {
   text-align: left;
   padding: 12px 8px;
   border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 tbody td {
@@ -234,4 +340,37 @@ tbody tr:hover {
   text-align: left;
   font-size: 12px;
   color: #999;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    width: auto;
+    padding: 12px;
+  }
+
+  .input-section,
+  .comparison-table {
+    padding: 16px;
+  }
+
+  .input-heading,
+  .results-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .button-group,
+  .results-actions {
+    width: 100%;
+  }
+
+  .button-group button,
+  .results-actions button {
+    flex: 1;
+  }
+
+  .results-summary {
+    width: 100%;
+    margin-left: 0;
+  }
 }

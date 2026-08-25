@@ -22,6 +22,15 @@ from app.sources.csres import CsresSource, SEARCH_URL  # noqa: E402
 from app.sync.v2_pipeline import stage_record  # noqa: E402
 
 
+def resume_start(*, candidate_count: int, checkpoint_offset: int | None) -> int:
+    """Return a bounded cursor and start a new verification cycle at EOF."""
+
+    if candidate_count <= 0:
+        return 0
+    offset = max(0, checkpoint_offset or 0)
+    return 0 if offset >= candidate_count else offset
+
+
 def _best_exact(records, code: str, expected_name: str):
     exact = [row for row in records if row.normalized_code == code]
     if not exact:
@@ -68,8 +77,9 @@ def main() -> int:
             .first()
         )
         explicit_mode = bool(explicit_codes)
-        start = 0 if explicit_mode else (
-            checkpoint.page_number if args.resume and checkpoint and checkpoint.page_number else 0
+        start = 0 if explicit_mode or not args.resume else resume_start(
+            candidate_count=len(codes),
+            checkpoint_offset=checkpoint.page_number if checkpoint else None,
         )
         selected = codes[start : start + max(1, args.limit)]
         run = SyncRunModel(

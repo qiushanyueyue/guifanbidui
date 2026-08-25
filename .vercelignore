@@ -3,3 +3,12 @@ backend/venv
 __pycache__
 .git
 .DS_Store
+.env*
+.agents
+skills-lock.json
+*.db
+*.db-*
+project_backup_*
+screenshot*.png
+walkthrough.md
+backend/debug_excel_stats.py

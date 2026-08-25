@@ -25,7 +25,7 @@ from app.services.standard_normalizer import (
     parse_edition,
     parse_standard_code,
 )
-from app.sources.csres import parse_csres_replacement_text
+from app.sources.csres import has_mandatory_clause_repeal, parse_csres_replacement_text
 
 
 @dataclass(frozen=True)
@@ -179,6 +179,10 @@ def publish_staging(db: Session) -> PublishReport:
         .order_by(StagingStandardModel.id)
         .all()
     )
+    documents_by_key = {
+        (row.normalized_name, row.source_name): row
+        for row in db.query(NormativeDocumentModel).all()
+    }
     groups: dict[tuple[str, str | None], list[tuple[StagingStandardModel, Any, str, Any]]] = {}
     quarantined = 0
     normative_documents = 0
@@ -198,12 +202,8 @@ def publish_staging(db: Session) -> PublishReport:
             name = clean_standard_name(row.raw_name)
             kind = _document_kind(name)
             if name and (kind != "standard" or not row.raw_code):
-                existing_document = (
-                    db.query(NormativeDocumentModel)
-                    .filter(NormativeDocumentModel.normalized_name == normalized_name(name))
-                    .filter(NormativeDocumentModel.source_name == row.source_name)
-                    .first()
-                )
+                document_key = (normalized_name(name), row.source_name)
+                existing_document = documents_by_key.get(document_key)
                 if existing_document is None:
                     existing_document = NormativeDocumentModel(
                         title=name,
@@ -211,6 +211,7 @@ def publish_staging(db: Session) -> PublishReport:
                         source_name=row.source_name,
                     )
                     db.add(existing_document)
+                    documents_by_key[document_key] = existing_document
                     normative_documents += 1
                 resolved_status = normalize_status(row.raw_status)
                 existing_document.title = name
@@ -243,6 +244,11 @@ def publish_staging(db: Session) -> PublishReport:
         row.parse_status = "ok"
         row.parse_error = None
 
+    standards_by_identity = {
+        (row.base_code, row.edition): row
+        for row in db.query(StandardV2Model).all()
+    }
+    pending_evidence: list[tuple[StandardV2Model, StagingStandardModel]] = []
     published = conflicts = single_source = cross_verified = 0
     for (code, explicit_edition), entries in groups.items():
         rows = [entry[0] for entry in entries]
@@ -256,25 +262,23 @@ def publish_staging(db: Session) -> PublishReport:
         name = next(iter(names.values()))
         # A previous pass may have classified the same source item as a
         # numberless document before its code was recovered from raw evidence.
-        db.query(NormativeDocumentModel).filter(
-            NormativeDocumentModel.normalized_name == normalized_name(name),
-            NormativeDocumentModel.source_name.in_({row.source_name for row in rows}),
-        ).delete(synchronize_session=False)
+        for source_name in {row.source_name for row in rows}:
+            document_key = (normalized_name(name), source_name)
+            stale_document = documents_by_key.pop(document_key, None)
+            if stale_document is not None:
+                db.delete(stale_document)
         edition = entries[0][3]
         revision_year = edition.revision_year
         if explicit_edition and revision_year is None:
             revision_year = parse_edition(explicit_edition).revision_year
         status, verification, source_conflict, conflict_details = _status_decision(rows)
         quality = "needs_review" if source_conflict else "publishable"
-        existing = (
-            db.query(StandardV2Model)
-            .filter(StandardV2Model.base_code == code)
-            .filter(StandardV2Model.edition == explicit_edition)
-            .first()
-        )
+        identity = (code, explicit_edition)
+        existing = standards_by_identity.get(identity)
         if existing is None:
             existing = StandardV2Model(base_code=code, edition=explicit_edition)
             db.add(existing)
+            standards_by_identity[identity] = existing
             published += 1
         existing.code = code
         existing.normalized_code = code
@@ -287,7 +291,8 @@ def publish_staging(db: Session) -> PublishReport:
         existing.revision_year = revision_year
         existing.revision_status = "amended" if explicit_edition else "original"
         existing.status = status
-        existing.mandatory_clause_status = "unknown"
+        if any(row.raw_relation_text for row in rows):
+            existing.mandatory_clause_status = "unknown"
         existing.publish_date = next((row.raw_publish_date for row in rows if row.raw_publish_date), None)
         existing.implement_date = next((row.raw_implement_date for row in rows if row.raw_implement_date), None)
         existing.abolish_date = next((row.raw_abolish_date for row in rows if row.raw_abolish_date), None)
@@ -299,49 +304,71 @@ def publish_staging(db: Session) -> PublishReport:
         existing.last_seen_at = max(row.fetched_at for row in rows)
         existing.last_verified_at = datetime.utcnow() if verification != "unverified" else None
         existing.published_at = datetime.utcnow() if quality == "publishable" else None
-        db.flush()
         for row in rows:
-            evidence = (
-                db.query(StandardV2SourceModel)
-                .filter(StandardV2SourceModel.standard_id == existing.id)
-                .filter(StandardV2SourceModel.staging_id == row.id)
-                .first()
-            )
-            if evidence is None:
-                db.add(
-                    StandardV2SourceModel(
-                        standard_id=existing.id,
-                        staging_id=row.id,
-                        source_name=row.source_name,
-                        source_url=row.source_url,
-                        observed_status=row.raw_status,
-                        fetched_at=row.fetched_at,
-                    )
-                )
+            pending_evidence.append((existing, row))
         conflicts += int(source_conflict)
         single_source += int(verification == "single_source")
         cross_verified += int(verification == "cross_verified")
 
+    db.flush()
+    evidence_keys = set(db.query(
+        StandardV2SourceModel.standard_id,
+        StandardV2SourceModel.staging_id,
+    ).all())
+    for standard, row in pending_evidence:
+        evidence_key = (standard.id, row.id)
+        if evidence_key in evidence_keys:
+            continue
+        evidence_keys.add(evidence_key)
+        db.add(StandardV2SourceModel(
+            standard_id=standard.id,
+            staging_id=row.id,
+            source_name=row.source_name,
+            source_url=row.source_url,
+            observed_status=row.raw_status,
+            fetched_at=row.fetched_at,
+        ))
+
     # Resolve directional replacement evidence only after every candidate is
     # present. Unresolved targets remain review evidence and never become
     # fabricated placeholder standards.
+    # These rows are derived from staging evidence, so rebuild them instead of
+    # retaining edges produced by an older parser. Seeded/manual relations have
+    # no evidence_staging_id and are intentionally preserved.
+    db.query(StandardV2RelationModel).filter(
+        StandardV2RelationModel.evidence_staging_id.isnot(None)
+    ).delete(synchronize_session=False)
+    db.flush()
+    standards_by_alias: dict[str, StandardV2Model] = {}
+    for standard in standards_by_identity.values():
+        for alias in _code_aliases(standard.base_code):
+            current = standards_by_alias.get(alias)
+            candidate_rank = (standard.revision_year or "", standard.id or 0)
+            current_rank = (current.revision_year or "", current.id or 0) if current is not None else ("", -1)
+            if current is None or candidate_rank > current_rank:
+                standards_by_alias[alias] = standard
+    relation_keys = set(db.query(
+        StandardV2RelationModel.source_standard_id,
+        StandardV2RelationModel.target_standard_id,
+        StandardV2RelationModel.relation_type,
+    ).all())
     relation_rows = [row for row in raw_rows if row.raw_relation_text]
     for evidence in relation_rows:
         source_code = parse_standard_code(evidence.raw_code)
         if source_code is None:
             continue
-        source_standard = (
-            db.query(StandardV2Model)
-            .filter(StandardV2Model.base_code == source_code.normalized)
-            .order_by(StandardV2Model.revision_year.desc().nullslast(), StandardV2Model.id)
-            .first()
-        )
+        source_standard = standards_by_alias.get(source_code.normalized)
         if source_standard is None:
             continue
+        if has_mandatory_clause_repeal(evidence.raw_relation_text):
+            source_standard.mandatory_clause_status = "partially_repealed"
         replaces, replaced_by = parse_csres_replacement_text(evidence.raw_relation_text)
         for relation_type, codes in (("replaces", replaces), ("replaced_by", replaced_by)):
             for target_code in codes:
-                target_standard = _find_relation_target(db, target_code)
+                target_standard = next(
+                    (standards_by_alias.get(alias) for alias in _code_aliases(target_code) if standards_by_alias.get(alias) is not None),
+                    None,
+                )
                 if target_standard is None:
                     existing_issue = (
                         db.query(QuarantinedStandardModel)
@@ -365,14 +392,9 @@ def publish_staging(db: Session) -> PublishReport:
                 if target_standard.id == source_standard.id:
                     source_standard.data_quality_status = "needs_review"
                     continue
-                relation = (
-                    db.query(StandardV2RelationModel)
-                    .filter(StandardV2RelationModel.source_standard_id == source_standard.id)
-                    .filter(StandardV2RelationModel.target_standard_id == target_standard.id)
-                    .filter(StandardV2RelationModel.relation_type == relation_type)
-                    .first()
-                )
-                if relation is None:
+                relation_key = (source_standard.id, target_standard.id, relation_type)
+                if relation_key not in relation_keys:
+                    relation_keys.add(relation_key)
                     db.add(
                         StandardV2RelationModel(
                             source_standard_id=source_standard.id,

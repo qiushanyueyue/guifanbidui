@@ -11,7 +11,8 @@ jobs:
     timeout-minutes: 45
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      ENABLE_REMOTE_EXTRACTION: "false"
+      STANDARDS_DATASET: v2
+      CRAWLER_DELAY_SECONDS: "1.5"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,5 +20,11 @@ jobs:
           python-version: "3.12"
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
-      - name: Verify a bounded batch
-        run: python scripts/verify_existing.py --limit 600
+      - name: Migrate additive V2 schema
+        run: python scripts/migrate_v2.py
+      - name: Verify a bounded V2 batch
+        run: python scripts/verify_v2_csres.py --limit 100 --resume
+      - name: Publish staged evidence through the quality gate
+        run: python scripts/rebuild_v2.py
+      - name: Run golden decisions
+        run: python scripts/run_golden_cases.py

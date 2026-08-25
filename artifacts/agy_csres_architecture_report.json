@@ -1,0 +1,322 @@
+{
+  "report_title": "工标网 CSRES 建筑规范核验与重建质量报告",
+  "execution_time": {
+    "started_at": "2026-08-25T03:08:38Z",
+    "finished_at": "2026-08-25T03:22:54Z",
+    "timezone": "UTC"
+  },
+  "candidate_selection": {
+    "description": "从 standards.db 的 standards_v2 表中筛选 verification_level=unverified (status=unknown) 且属于建筑及市政相关领域的规范",
+    "domain_keywords": [
+      "建筑",
+      "消防",
+      "结构",
+      "给水",
+      "排水",
+      "暖通",
+      "采暖",
+      "通风",
+      "空调",
+      "电气",
+      "节能",
+      "防水",
+      "施工",
+      "验收",
+      "规划",
+      "市政",
+      "地基",
+      "基础",
+      "混凝土",
+      "钢结构",
+      "防烟",
+      "排烟",
+      "抗震",
+      "照明"
+    ],
+    "prefix_quotas": {
+      "GB": 40,
+      "GB/T": 20,
+      "JGJ": 25,
+      "JGJ/T": 15,
+      "CJJ": 10,
+      "CJJ/T": 10
+    },
+    "total_selected": 120,
+    "batch_size": 24,
+    "batch_count": 5,
+    "crawler_delay_seconds": 1.6
+  },
+  "verification_summary": {
+    "attempted": 120,
+    "succeeded": 116,
+    "failed": 4,
+    "rate_limited": 0,
+    "success_rate": "96.67%"
+  },
+  "statistics_comparison": {
+    "before": {
+      "status": {
+        "current": 94,
+        "abolished": 4,
+        "unknown": 1617
+      },
+      "verification_level": {
+        "cross_verified": 92,
+        "single_source": 6,
+        "unknown_or_unverified": 1617
+      }
+    },
+    "after": {
+      "status": {
+        "current": 196,
+        "abolished": 16,
+        "unknown": 1504
+      },
+      "verification_level": {
+        "cross_verified": 205,
+        "single_source": 7,
+        "unknown_or_unverified": 1504
+      }
+    },
+    "net_changes": {
+      "cross_verified_delta": "+113",
+      "current_status_delta": "+102",
+      "abolished_status_delta": "+12",
+      "unknown_delta": "-113"
+    }
+  },
+  "failure_reasons_breakdown": [
+    {
+      "category": "not_found",
+      "reason": "NotFound: exact normalized code absent",
+      "count": 1,
+      "standards": [
+        "GB 50006-2010 (厂房建筑模数协调标准)"
+      ]
+    },
+    {
+      "category": "parse_error",
+      "reason": "ParseError: CSRES search page layout mismatch",
+      "count": 1,
+      "standards": [
+        "GB 51400-2020 (看守所建筑设计标准)"
+      ]
+    },
+    {
+      "category": "source_unavailable",
+      "reason": "SourceUnavailable: HTTP request timeout or reset",
+      "count": 2,
+      "standards": [
+        "JGJ 298-2013 (住宅室内防水工程技术规范)",
+        "JGJ 475-2019 (温和地区居住建筑节能设计标准)"
+      ]
+    }
+  ],
+  "sampled_records_10": [
+    {
+      "code": "GB 50404-2017",
+      "name": "硬泡聚氨酯保温防水工程技术规范",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/296561.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "GB 50855-2013",
+      "name": "仿古建筑工程工程量计算规范",
+      "status": "abolished",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/231649.html",
+      "raw_status": "已作废",
+      "replaced_by": "None"
+    },
+    {
+      "code": "GB 50854-2013",
+      "name": "房屋建筑与装饰工程工程量计算规范",
+      "status": "abolished",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/231650.html",
+      "raw_status": "已作废",
+      "replaced_by": "None"
+    },
+    {
+      "code": "GB 18582-2020",
+      "name": "建筑用墙面涂料中有害物质限量",
+      "status": "abolished",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/341912.html",
+      "raw_status": "已作废",
+      "replaced_by": "GB 30981.1-2025"
+    },
+    {
+      "code": "GB/T 51368-2019",
+      "name": "建筑光伏系统应用技术标准",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/333461.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "GB/T 7106-2019",
+      "name": "建筑外门窗气密、水密、抗风压性能检测方法",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/335607.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "JGJ 8-2016",
+      "name": "建筑变形测量规范",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/285846.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "JGJ 345-2014",
+      "name": "公共建筑吊顶工程技术规程",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/254685.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "JGJ/T 285-2014",
+      "name": "公共建筑能耗远程监测系统技术规程",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/251936.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    },
+    {
+      "code": "CJJ 6-2009",
+      "name": "城镇排水管道维护安全技术规程",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/209111.html",
+      "raw_status": "现行",
+      "replaced_by": "None"
+    }
+  ],
+  "target_core_standards": [
+    {
+      "code": "GB 50016-2014",
+      "name": "建筑设计防火规范",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": "2018年版",
+      "csres_url": "http://www.csres.com/detail/248465.html",
+      "raw_status": "现行",
+      "replaced_by": "None",
+      "replaces": "None"
+    },
+    {
+      "code": "JGJ/T 67-2019",
+      "name": "办公建筑设计标准",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/343587.html",
+      "raw_status": "现行",
+      "replaced_by": "None",
+      "replaces": "None"
+    },
+    {
+      "code": "GB 50157-1992",
+      "name": "地下铁道设计规范 工程建设",
+      "status": "abolished",
+      "verification_level": "single_source",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/20451.html",
+      "raw_status": "已作废",
+      "replaced_by": "GB 50157-2003",
+      "replaces": "None"
+    },
+    {
+      "code": "GB 50157-2003",
+      "name": "地铁设计规范",
+      "status": "abolished",
+      "verification_level": "single_source",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/62113.html",
+      "raw_status": "已作废",
+      "replaced_by": "GB 50157-2013",
+      "replaces": "GB 50157-1992"
+    },
+    {
+      "code": "GB 50157-2013",
+      "name": "地铁设计规范",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": null,
+      "csres_url": "http://www.csres.com/detail/235062.html",
+      "raw_status": "现行",
+      "replaced_by": "None",
+      "replaces": "GB 55033-2022; GB 50157-2003"
+    },
+    {
+      "code": "GB/T 50010-2010",
+      "name": "混凝土结构设计标准",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": "2024年版",
+      "csres_url": "http://www.csres.com/detail/212269.html",
+      "raw_status": "现行",
+      "replaced_by": "None",
+      "replaces": "None"
+    },
+    {
+      "code": "GB/T 50011-2010",
+      "name": "建筑抗震设计标准",
+      "status": "current",
+      "verification_level": "cross_verified",
+      "edition": "2024年版",
+      "csres_url": "http://www.csres.com/detail/211372.html",
+      "raw_status": "现行",
+      "replaced_by": "None",
+      "replaces": "None"
+    }
+  ],
+  "quality_metrics": {
+    "total_raw": 2197,
+    "total_canonical": 1716,
+    "normative_documents": 217,
+    "duplicates_merged": 216,
+    "relations": 80,
+    "invalid_relation": 0,
+    "quarantined": 102,
+    "suspect": 90,
+    "parse_failed": 41,
+    "publishable": true
+  },
+  "test_commands_and_results": [
+    {
+      "command": "PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /opt/anaconda3/bin/pytest tests/test_sources.py tests/test_v2_pipeline.py tests/test_quality.py tests/test_v2_models.py tests/test_v2_repo.py tests/test_resolver.py tests/test_normalizer.py tests/test_match_decisions.py tests/test_v2_automation.py -v",
+      "passed": 58,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    {
+      "command": "PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /opt/anaconda3/bin/pytest tests/",
+      "passed": 61,
+      "failed": 0,
+      "status": "PASSED"
+    }
+  ]
+}

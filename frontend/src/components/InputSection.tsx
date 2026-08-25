@@ -25,46 +25,39 @@ export const InputSection: React.FC<InputSectionProps> = ({ onExtract, onCheckAl
 
     return (
         <div className="input-section card">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                📝 规范输入
-                <span
+            <div className="input-heading">
+                <h2>1. 规范输入</h2>
+                <button
+                    type="button"
+                    className="example-button"
                     onClick={handleExampleClick}
-                    style={{
-                        fontSize: '14px',
-                        fontWeight: 'normal',
-                        color: '#666',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px'
-                    }}
                     title="点击填入示例"
                 >
-                    示例输入
-                    <span style={{ color: '#4f46e5', textDecoration: 'none' }}>(点击示例文本快速体验)</span>
-                </span>
-            </h2>
+                    填入示例
+                </button>
+            </div>
+            <label className="sr-only" htmlFor="standards-input">待核验规范文本</label>
             <textarea
+                id="standards-input"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="请输入需要进行查新的规范名称与编号..."
             />
 
-            <div className="button-group" style={{ display: 'flex', gap: '30px', marginTop: '20px' }}>
+            <div className="button-group">
                 <button
                     className="btn-primary"
                     onClick={() => onExtract(text)}
                     disabled={isLoading || !text.trim()}
                 >
-                    ⚡ {isLoading ? '正在提取...' : '1. 规范提取'}
+                    {isLoading ? '正在查新…' : '提取并查新'}
                 </button>
                 <button
-                    className={hasStandards ? "btn-primary" : "btn-secondary"}
+                    className="btn-secondary"
                     onClick={onCheckAll}
-                    disabled={!hasStandards}
-                    style={!hasStandards ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    disabled={!hasStandards || isLoading}
                 >
-                    🔍 2. 规范查新
+                    重新查新
                 </button>
             </div>
         </div>

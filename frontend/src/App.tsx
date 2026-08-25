@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, type StandardInfo, type SearchResult, type Stats } from './api';
 import { InputSection } from './components/InputSection';
 import { ComparisonTable } from './components/ComparisonTable';
@@ -13,18 +13,31 @@ function App() {
   // Results Map for comparison
   const [resultsMap, setResultsMap] = useState<Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>>({});
   const [stats, setStats] = useState<Stats>({ count: 0, last_updated: null, current: 0, upcoming: 0, abolished: 0, replaced: 0, partially_amended: 0, unknown: 0, conflict: 0 });
+  const resultKeys = useRef(new WeakMap<StandardInfo, string>());
+  const nextResultKey = useRef(0);
 
-  // Trigger for checking all standards
-  const [checkTrigger, setCheckTrigger] = useState(0);
+  const getResultKey = useCallback((standard: StandardInfo): string => {
+    const existing = resultKeys.current.get(standard);
+    if (existing) return existing;
+    const key = `row-${nextResultKey.current++}`;
+    resultKeys.current.set(standard, key);
+    return key;
+  }, []);
 
-  const checkStandard = useCallback(async (code: string, name?: string, edition?: string | null) => {
+  const checkStandard = useCallback(async (code: string, name?: string, edition?: string | null, resultKey?: string) => {
     // Should check if either code OR name exists
     if (!code && !name) return;
 
-    // Use code as key if available, otherwise use name
-    const key = code || name || 'unknown';
+    // Keep a row-specific key so duplicate codes and editions cannot overwrite each other.
+    const key = resultKey || code || name || 'unknown';
+    const updateResult = (value: SearchResult | 'loading' | 'error' | 'not_found') => {
+      setResultsMap(prev => ({
+        ...prev,
+        [key]: value,
+      }));
+    };
 
-    setResultsMap(prev => ({ ...prev, [key]: 'loading' }));
+    updateResult('loading');
     try {
       let results: SearchResult[] = [];
 
@@ -41,28 +54,22 @@ function App() {
       }
 
       if (results && results.length > 0) {
-        setResultsMap(prev => ({ ...prev, [key]: results[0] }));
+        updateResult(results[0]);
       } else {
-        setResultsMap(prev => ({ ...prev, [key]: 'not_found' }));
+        updateResult('not_found');
       }
     } catch {
-      setResultsMap(prev => ({ ...prev, [key]: 'error' }));
+      updateResult('error');
     }
   }, []);
 
-  // Listen for global check trigger
-  useEffect(() => {
-    const runCheckAll = async () => {
-      for (const std of standards) {
-        // Always run check to update status in-place (no flicker)
-        if (std.code || std.name) {
-          await checkStandard(std.code, std.name || undefined, std.edition || std.revision_year);
-        }
+  const checkStandards = useCallback(async (items: StandardInfo[]) => {
+    for (const std of items) {
+      if (std.code || std.name) {
+        await checkStandard(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std));
       }
-      setIsLoading(false);
-    };
-    runCheckAll();
-  }, [checkTrigger, standards, checkStandard]);
+    }
+  }, [checkStandard, getResultKey]);
 
   useEffect(() => {
     api.getDatabaseStats().then(data => setStats(data)).catch(console.error);
@@ -76,7 +83,9 @@ function App() {
       setStandards(extracted);
       if (extracted.length === 0) {
         alert('未提取到规范信息，请检查输入格式');
+        return;
       }
+      await checkStandards(extracted);
     } catch (error: unknown) {
       console.error('Error extracting standards:', error);
       const errorMsg = error instanceof Error ? error.message : '未知错误';
@@ -107,17 +116,21 @@ function App() {
     setStandards(newStandards);
   };
 
-  const handleCheckAll = () => {
+  const handleCheckAll = async () => {
     if (standards.length === 0) return;
-    // Clear existing results to force a fresh check (prevents stale state/flickering)
+    setIsLoading(true);
     setResultsMap({});
-    setCheckTrigger(prev => prev + 1);
+    try {
+      await checkStandards(standards);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="app-container">
       <header className="app-header">
-        <span style={{ fontSize: '20px' }}>📄</span>
+        <span className="app-mark" aria-hidden="true">规</span>
         <h1>规范名称校验工具</h1>
       </header>
 
@@ -132,6 +145,7 @@ function App() {
           standards={standards}
           resultsMap={resultsMap}
           onCheckSingle={checkStandard}
+          getResultKey={getResultKey}
           onClear={handleClear}
           onAdd={handleAddStandard}
           onRemove={handleRemoveStandard}
@@ -148,7 +162,7 @@ function App() {
                 style={{ backgroundColor: '#4f46e5', width: 'auto', padding: '10px 20px', borderRadius: '6px' }}
                 onClick={() => setIsExportOpen(true)}
               >
-                📑 导出规范引用
+                导出规范引用
               </button>
             </div>
             <div style={{ color: '#888', fontSize: '12px', textAlign: 'left', lineHeight: '1.6' }}>
@@ -175,6 +189,7 @@ function App() {
         onClose={() => setIsExportOpen(false)}
         standards={standards}
         resultsMap={resultsMap}
+        getResultKey={getResultKey}
       />
     </div>
   );

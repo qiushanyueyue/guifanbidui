@@ -11,7 +11,8 @@ jobs:
     timeout-minutes: 60
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      ENABLE_REMOTE_EXTRACTION: "false"
+      STANDARDS_DATASET: v2
+      CRAWLER_DELAY_SECONDS: "1.5"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,5 +20,11 @@ jobs:
           python-version: "3.12"
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
-      - name: Run bounded full reconcile
-        run: python scripts/full_reconcile.py --limit 500
+      - name: Migrate additive V2 schema
+        run: python scripts/migrate_v2.py
+      - name: Continue the bounded V2 reconcile cycle
+        run: python scripts/verify_v2_csres.py --limit 200 --resume
+      - name: Publish staged evidence through the quality gate
+        run: python scripts/rebuild_v2.py --retry-quarantine
+      - name: Run golden decisions
+        run: python scripts/run_golden_cases.py

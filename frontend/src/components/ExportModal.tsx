@@ -8,9 +8,10 @@ interface ExportModalProps {
     onClose: () => void;
     standards: StandardInfo[];
     resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>;
+    getResultKey: (standard: StandardInfo) => string;
 }
 
-export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, standards, resultsMap }) => {
+export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, standards, resultsMap, getResultKey }) => {
     const [showIndex, setShowIndex] = useState(true);
     const [wrapName, setWrapName] = useState(true);
     const [wrapCode, setWrapCode] = useState(true);
@@ -28,7 +29,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
         let validIndex = 1;
 
         standards.forEach((std) => {
-            const result = resultsMap[std.code || std.name || 'unknown'];
+            const result = resultsMap[getResultKey(std)];
             const hasMatch = result && typeof result === 'object';
 
             // Unknown/conflict records must not be presented as verified
@@ -141,7 +142,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                                 </thead>
                                 <tbody>
                                     {standards.map((std, i) => {
-                                        const result = resultsMap[std.code || std.name || 'unknown'];
+                                        const result = resultsMap[getResultKey(std)];
                                         const hasMatch = result && typeof result === 'object';
 
                                         const isAbolished = hasMatch && isInactiveStatus(result.status);
@@ -152,7 +153,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                                         const isDifferent = isCodeDifferent || isNameDifferent;
 
                                         return (
-                                            <tr key={i} style={{ borderBottom: '1px solid #f1f1f1' }}>
+                                            <tr key={getResultKey(std)} style={{ borderBottom: '1px solid #f1f1f1' }}>
                                                 <td style={{ padding: '8px', color: '#999' }}>{i + 1}</td>
                                                 <td style={{ padding: '8px' }}>
                                                     <div style={{ textDecoration: isNameDifferent && !isAbolished ? 'line-through' : 'none', color: isNameDifferent ? '#ef4444' : '#333' }}>

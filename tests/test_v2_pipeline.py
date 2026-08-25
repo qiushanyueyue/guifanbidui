@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.models.base import Base
@@ -191,3 +191,117 @@ def test_replacement_relation_resolves_two_digit_year_alias():
     publish_staging(db)
     relation = db.query(StandardV2RelationModel).one()
     assert relation.relation_type == "replaces"
+
+
+def test_mandatory_clause_repeal_sets_clause_status_without_reverse_edge():
+    from app.models.models import StandardV2RelationModel
+
+    db = _db()
+    for code, name in [
+        ("GB 50157-2003", "地铁设计规范"),
+        ("GB 50157-2013", "地铁设计规范"),
+        ("GB 55033-2022", "城市轨道交通工程项目规范"),
+    ]:
+        stage_record(db, **_record(raw_code=code, raw_name=name, source_url=f"https://example.test/{code}"))
+    stage_record(
+        db,
+        **_record(
+            source_name="csres",
+            raw_code="GB 50157-2013",
+            raw_name="地铁设计规范",
+            raw_status="现行",
+            source_url="https://example.test/csres/235062",
+            raw_relation_text="替代 GB 50157-2003 ;自《城市轨道交通工程项目规范》 GB 55033-2022 实施之日起，该标准相关强制性条文同时废止",
+        ),
+    )
+    publish_staging(db)
+
+    standard = db.query(StandardV2Model).filter_by(base_code="GB 50157-2013").one()
+    assert standard.status == "current"
+    assert standard.mandatory_clause_status == "partially_repealed"
+    relations = db.query(StandardV2RelationModel).filter_by(source_standard_id=standard.id).all()
+    assert [(row.relation_type, row.target_standard_id) for row in relations] == [
+        ("replaces", db.query(StandardV2Model).filter_by(base_code="GB 50157-2003").one().id)
+    ]
+
+
+def test_rebuild_removes_stale_derived_relation_edges():
+    from app.models.models import StandardV2RelationModel
+
+    db = _db()
+    evidence, _ = stage_record(db, **_record(raw_code="GB 50157-2013", raw_name="地铁设计规范"))
+    stage_record(db, **_record(raw_code="GB 55033-2022", raw_name="城市轨道交通工程项目规范", source_url="https://example.test/new"))
+    publish_staging(db)
+    source = db.query(StandardV2Model).filter_by(base_code="GB 50157-2013").one()
+    target = db.query(StandardV2Model).filter_by(base_code="GB 55033-2022").one()
+    db.add(StandardV2RelationModel(
+        source_standard_id=source.id,
+        target_standard_id=target.id,
+        relation_type="replaces",
+        raw_relation_text="stale parser output",
+        evidence_staging_id=evidence.id,
+    ))
+    db.commit()
+
+    publish_staging(db)
+
+    assert db.query(StandardV2RelationModel).count() == 0
+
+
+def test_publish_uses_bounded_query_count_for_many_groups():
+    db = _db()
+    for number in range(10000, 10020):
+        stage_record(
+            db,
+            **_record(
+                raw_code=f"GB {number}-2020",
+                raw_name=f"测试建筑规范 {number}",
+                source_url=f"https://example.test/{number}",
+            ),
+        )
+    publish_staging(db)
+
+    query_count = 0
+
+    def count_query(*_args):
+        nonlocal query_count
+        query_count += 1
+
+    event.listen(db.bind, "before_cursor_execute", count_query)
+    try:
+        publish_staging(db)
+    finally:
+        event.remove(db.bind, "before_cursor_execute", count_query)
+
+    assert db.query(StandardV2Model).count() == 20
+    assert query_count <= 20
+
+
+def test_rebuild_preserves_reviewed_clause_status_without_new_relation_evidence():
+    db = _db()
+    reviewed = StandardV2Model(
+        code="GB 50157-2013",
+        normalized_code="GB 50157-2013",
+        base_code="GB 50157-2013",
+        standard_prefix="GB",
+        standard_number="50157",
+        standard_year="2013",
+        name="地铁设计规范",
+        normalized_name="地铁设计规范",
+        mandatory_clause_status="partially_repealed",
+    )
+    db.add(reviewed)
+    db.commit()
+    stage_record(
+        db,
+        **_record(
+            raw_code="GB 50157-2013",
+            raw_name="地铁设计规范",
+            raw_edition=None,
+            raw_relation_text=None,
+        ),
+    )
+
+    publish_staging(db)
+
+    assert db.query(StandardV2Model).one().mandatory_clause_status == "partially_repealed"

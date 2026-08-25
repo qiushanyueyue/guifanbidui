@@ -75,8 +75,13 @@ def main() -> int:
                 if row.relation_type in {"replaces", "replaced_by"}
             }
         )
-        known_ids = {row[0] for row in db.query(StandardV2Model.id).all()}
-        relation_quality = validate_relation_edges(edges, known_ids=known_ids)
+        standards = db.query(StandardV2Model.id, StandardV2Model.standard_year).all()
+        known_ids = {row.id for row in standards}
+        relation_quality = validate_relation_edges(
+            edges,
+            known_ids=known_ids,
+            standard_years={row.id: row.standard_year for row in standards},
+        )
         report = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_raw": db.query(StagingStandardModel).count(),
@@ -97,7 +102,8 @@ def main() -> int:
             "conflicts": status_counts.get("conflict", 0),
             "suspect": quality_counts.get("needs_review", 0),
             "quarantined": db.query(QuarantinedStandardModel).filter(QuarantinedStandardModel.resolved_at.is_(None)).count(),
-            "invalid_relation": len(relation_quality.self_relations) + len(relation_quality.cycles) + len(relation_quality.missing_targets),
+            "invalid_relation": len(relation_quality.self_relations) + len(relation_quality.cycles) + len(relation_quality.missing_targets) + len(relation_quality.reverse_chronology),
+            "reverse_chronology": len(relation_quality.reverse_chronology),
             "broken_url": 0,
             "parse_failed": db.query(StagingStandardModel).filter(StagingStandardModel.parse_status.in_(["failed", "not_found"])).count(),
             "relations": len(relation_rows),

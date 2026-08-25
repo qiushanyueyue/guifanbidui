@@ -23,10 +23,31 @@ def _status_text(value: str) -> str:
     return re.sub(r"\s+", "", value or "").strip("-：:")
 
 
+def has_mandatory_clause_repeal(value: str | None) -> bool:
+    raw = re.sub(r"\s+", "", str(value or ""))
+    return "强制性" in raw and any(marker in raw for marker in ("废止", "废除", "不再适用"))
+
+
+def _is_clause_level_notice(segment: str) -> bool:
+    compact = re.sub(r"\s+", "", segment)
+    return "强制性" in compact or (
+        "局部修订" in compact and any(marker in compact for marker in ("条文", "条款", "第"))
+    )
+
+
 def parse_csres_replacement_text(value: str | None) -> tuple[list[str], list[str]]:
     """Split the old and new sides of CSRES compound replacement prose."""
 
     raw = str(value or "").strip()
+    if not raw:
+        return [], []
+    # CSRES often appends notices such as "GB 550xx 实施后，相关强制性条文废止".
+    # That is clause-level evidence, not a whole-standard replacement edge.
+    raw = ";".join(
+        segment
+        for segment in re.split(r"[;；。]", raw)
+        if not _is_clause_level_notice(segment)
+    ).strip()
     if not raw:
         return [], []
     if "被" in raw:

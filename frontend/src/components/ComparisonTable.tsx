@@ -4,10 +4,26 @@ import { StandardDetailModal } from './StandardDetailModal';
 import { FeedbackModal } from './FeedbackModal';
 import { openCsresSearch } from '../utils/csres';
 
+const formatDataUpdatedAt = (value: string | null): string => {
+    if (!value) return '暂无';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '暂无';
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(parsed).replaceAll('/', '.');
+};
+
 interface ComparisonTableProps {
     standards: StandardInfo[];
     resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>; // New Prop
-    onCheckSingle: (code: string, name?: string, edition?: string | null) => Promise<void>; // New Prop
+    onCheckSingle: (code: string, name?: string, edition?: string | null, resultKey?: string) => Promise<void>; // New Prop
+    getResultKey: (standard: StandardInfo) => string;
     onClear?: () => void;
     onAdd?: () => void;
     onRemove?: (index: number) => void;
@@ -20,6 +36,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
     standards,
     resultsMap,
     onCheckSingle,
+    getResultKey,
     onClear,
     onAdd,
     onRemove,
@@ -65,7 +82,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
     if (standards.length === 0) return null;
 
     const visibleStandards = standards
-        .map((standard, index) => ({ standard, index, result: resultsMap[standard.code || standard.name || 'unknown'] }))
+        .map((standard, index) => ({ standard, index, result: resultsMap[getResultKey(standard)] }))
         .filter(({ result }) => {
             if (filter === 'all') return true;
             if (filter === 'not_found') return result === 'not_found';
@@ -76,7 +93,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
         });
     const batchCounts = standards.reduce(
         (counts, standard) => {
-            const result = resultsMap[standard.code || standard.name || 'unknown'];
+            const result = resultsMap[getResultKey(standard)];
             if (result === 'not_found') counts.notFound += 1;
             else if (result && typeof result === 'object') {
                 if (result.match_type === 'exact') counts.exact += 1;
@@ -90,23 +107,24 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
 
     return (
         <div className="comparison-table" style={{ marginTop: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2>2. 识别结果</h2>
-                <div style={{ fontSize: '12px', color: '#666' }}>
-                    {stats ? (
-                        <>当前收录规范 {stats.count} 条 · 最近核验 {stats.last_updated ? stats.last_updated.replace(/-/g, '.').slice(0, 16) : '暂无'}</>
-                    ) : (
-                        '加载统计中...'
-                    )}
+            <div className="results-header">
+                <div>
+                    <h2>2. 查新结果</h2>
+                    <div className="dataset-status" aria-live="polite">
+                        {stats ? (
+                            <>数据库 {stats.count} 条 · 数据更新时间 {formatDataUpdatedAt(stats.last_updated)}</>
+                        ) : (
+                            '加载统计中...'
+                        )}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={onAdd} style={{ background: '#fff', color: '#333', border: '1px solid #ccc', cursor: 'pointer' }}>新增一行</button>
-                    <button onClick={onClear} style={{ background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}>清空表格</button>
-                    {/* One-click query removed per request (Use top-level 'Standard Check') */}
+                <div className="results-actions">
+                    <button className="btn-secondary" onClick={onAdd}>新增一行</button>
+                    <button className="btn-danger" onClick={onClear}>清空表格</button>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <div className="results-toolbar">
                 {([
                     ['all', '全部'], ['issues', '仅问题'], ['obsolete', '已废止'], ['update', '需更新'], ['not_found', '未找到'],
                 ] as const).map(([value, label]) => (
@@ -119,12 +137,13 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                         }}
                     >{label}</button>
                 ))}
-                <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#6b7280', alignSelf: 'center' }}>
+                <span className="results-summary">
                     本次识别 {standards.length} 条 · 完全一致 {batchCounts.exact} · 需修改 {batchCounts.issues} · 已废止 {batchCounts.obsolete} · 未找到 {batchCounts.notFound}
                 </span>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #eee', fontSize: '13px' }}>
+            <div className="table-scroll" tabIndex={0} aria-label="规范查新结果表格，可横向滚动">
+            <table>
                 <thead>
                     <tr style={{ background: '#fafafa', color: '#666', height: '45px', textAlign: 'left' }}>
                         <th style={{ padding: '0 10px', width: '50px' }}>序号</th>
@@ -141,12 +160,11 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                 <tbody>
                     {visibleStandards.map(({ standard: std, index }) => (
                         <StandardRowControlled
-                            key={index}
+                            key={getResultKey(std)}
                             index={index + 1}
                             standard={std}
-                            // Use code as primary key, fallback to name
-                            resultStatus={resultsMap[std.code || std.name || 'unknown']}
-                            onCheck={() => onCheckSingle(std.code, std.name || undefined, std.edition || std.revision_year)}
+                            resultStatus={resultsMap[getResultKey(std)]}
+                            onCheck={() => onCheckSingle(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std))}
                             onViewDetail={(result) => handleViewDetail(result, std)}
                             onRemove={() => onRemove && onRemove(index)}
                             onUpdate={(field, value) => onUpdate && onUpdate(index, field, value)}
@@ -155,6 +173,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                     ))}
                 </tbody>
             </table>
+            </div>
 
             {/* Modal Restored */}
             <StandardDetailModal
@@ -202,10 +221,24 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
         unknown: '待核验',
         source_conflict: '来源冲突',
     };
-    const matchType = result?.match_type || (result?.status === 'unknown' ? 'unknown' : 'exact');
+    const matchType = result?.match_type || 'unknown';
     const matchLabel = result ? (matchLabels[matchType] || '待核验') : '-';
     const isIssue = matchType !== 'exact';
     const isConsistent = result?.message || matchLabel;
+    const revisionMismatch = matchType === 'revision_missing'
+        || isConsistent.includes('版本')
+        || isConsistent.includes('修订版')
+        || isConsistent.includes('年份');
+    const csresUrl = result?.sources?.find((source) => source.name === 'csres' && source.url)?.url;
+    const soujianzhuKeyword = result?.name || standard.name || standard.code;
+    const soujianzhuSearchUrl = `https://www.soujianzhu.cn/Search/SouGuifan.aspx?skey=${encodeURIComponent(soujianzhuKeyword)}`;
+    const statusTone = result?.status === 'current'
+        ? { background: '#f0fdf4', color: '#15803d' }
+        : ['upcoming', 'partially_amended'].includes(result?.status || '')
+            ? { background: '#fffbeb', color: '#b45309' }
+            : result?.status === 'unknown'
+                ? { background: '#f3f4f6', color: '#6b7280' }
+                : { background: '#fef2f2', color: '#b91c1c' };
 
     // Replacement Info Logic
     const [replacementInfo, setReplacementInfo] = React.useState<string | null>(null);
@@ -262,9 +295,9 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                     type="text"
                     value={standard.code}
                     onChange={(e) => onUpdate('code', e.target.value)}
-                    style={{
-                        border: (isConsistent.includes('编号') || isConsistent.includes('版本') || isConsistent.includes('年份')) ? '1px solid #f59e0b' : '1px solid #ddd',
-                        background: (isConsistent.includes('编号') || isConsistent.includes('版本') || isConsistent.includes('年份')) ? '#fffbeb' : '#fff',
+                        style={{
+                            border: (isConsistent.includes('编号') || revisionMismatch) ? '1px solid #f59e0b' : '1px solid #ddd',
+                            background: (isConsistent.includes('编号') || revisionMismatch) ? '#fffbeb' : '#fff',
                         borderRadius: '4px',
                         padding: '6px',
                         width: '100%',
@@ -320,8 +353,8 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
                 {result && (
                     <span style={{
-                        background: result.status === 'current' ? '#f0fdf4' : result.status === 'unknown' ? '#f3f4f6' : '#fef2f2',
-                        color: result.status === 'current' ? '#15803d' : result.status === 'unknown' ? '#6b7280' : '#b91c1c',
+                        background: statusTone.background,
+                        color: statusTone.color,
                         padding: '2px 8px',
                         borderRadius: '2px',
                         fontSize: '12px'
@@ -366,16 +399,16 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
 
             {/* 搜建筑链接 - Updated Logic */}
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
-                {result && (
+                {soujianzhuKeyword && (
                     <a
-                        href={result.soujianzhu_url || `https://www.soujianzhu.cn/Search/SouGuifan.aspx?skey=${encodeURIComponent(result.name)}`}
+                        href={result?.soujianzhu_url || soujianzhuSearchUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn-link"
                         style={{
                             display: 'inline-block',
                             padding: '4px 12px',
-                            backgroundColor: result.soujianzhu_url ? '#0ea5e9' : '#64748b', // Blue for direct link, Slate (Greyish) for search
+                            backgroundColor: result?.soujianzhu_url ? '#0ea5e9' : '#64748b', // Blue for direct link, Slate (Greyish) for search
                             color: 'white',
                             borderRadius: '4px',
                             fontSize: '12px',
@@ -385,7 +418,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                             cursor: 'pointer'
                         }}
                     >
-                        {result.soujianzhu_url ? "搜建筑链接" : "搜建筑搜索"}
+                        {result?.soujianzhu_url ? "搜建筑链接" : "搜建筑搜索"}
                     </a>
                 )}
             </td>
@@ -393,9 +426,9 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
             {/* 详细信息 & 操作 */}
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    {result && typeof result === 'object' && result.url ? (
+                    {result && csresUrl ? (
                         <button
-                            onClick={() => onViewDetail(result)}
+                            onClick={() => onViewDetail({ ...result, url: csresUrl })}
                             className="btn-link"
                             style={{
                                 display: 'inline-block',
@@ -414,7 +447,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         </button>
                     ) : null}
 
-                    {(!result || resultStatus === 'not_found' || resultStatus === 'error') && (
+                    {(!result || !csresUrl || resultStatus === 'not_found' || resultStatus === 'error') && (
                         <button
                             onClick={() => {
                                 // Direct Jump: Open CSRES search in new tab using GBK form

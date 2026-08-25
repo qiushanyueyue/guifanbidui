@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from app.sources import csres as csres_module
 from app.sources.csres import parse_csres_detail_html, parse_csres_replacement_text, parse_csres_search_html
 from app.sources.soujianzhu import parse_soujianzhu_recent_html
 from app.sources.base import ParseError
@@ -42,3 +43,24 @@ def test_csres_compound_replacement_text_is_split_by_direction():
     )
     assert replaces == ["GB 50157-1992"]
     assert replaced_by == ["GB 50157-2013"]
+
+
+def test_mandatory_clause_repeal_is_not_parsed_as_whole_standard_replacement():
+    text = "替代 GB 50157-2003 ;自《城市轨道交通工程项目规范》 GB 55033-2022 实施之日起，该标准相关强制性条文同时废止"
+    replaces, replaced_by = parse_csres_replacement_text(text)
+    assert replaces == ["GB 50157-2003"]
+    assert replaced_by == []
+    assert csres_module.has_mandatory_clause_repeal(text) is True
+
+
+def test_numbered_mandatory_articles_are_also_clause_level_evidence():
+    text = "替代 GB 50345-2004 ;自 GB 55030-2022 实施之日起，该标准相关强制性第3.0.5、4.5.1条同时废止"
+    replaces, replaced_by = parse_csres_replacement_text(text)
+    assert replaces == ["GB 50345-2004"]
+    assert replaced_by == []
+    assert csres_module.has_mandatory_clause_repeal(text) is True
+
+
+def test_partial_revision_notice_is_not_a_whole_standard_replacement():
+    text = "《城市综合管廊工程技术标准》（GB/T 50838-2015）局部修订的条文，自2025年4月1日起实施，本标准的第3.3节同时废止"
+    assert parse_csres_replacement_text(text) == ([], [])

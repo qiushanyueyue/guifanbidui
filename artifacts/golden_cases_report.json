@@ -87,8 +87,8 @@
       "id": 11,
       "code": "JGJ l8-2012",
       "name": "钢筋焊接及验收规程",
-      "expected_match_type": "unknown",
-      "actual_match_type": "unknown",
+      "expected_match_type": "exact",
+      "actual_match_type": "exact",
       "passed": true
     },
     {

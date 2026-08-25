@@ -1,0 +1,61 @@
+{
+  "reviewer": "codex-main-agent",
+  "accepted_at": "2026-08-25T05:24:17Z",
+  "agent_execution": {
+    "attempted": 120,
+    "succeeded": 116,
+    "failed": 4,
+    "rate_limited": 0,
+    "batch_count": 5,
+    "batch_size": 24,
+    "crawler_delay_seconds": 1.6
+  },
+  "independent_url_sample": {
+    "checked": 10,
+    "exact_code_matches": 10,
+    "failed": 0
+  },
+  "review_findings_fixed": [
+    {
+      "issue": "mandatory-clause repeal text produced false whole-standard replacement edges",
+      "examples": [
+        "GB 50157-2013 -> GB 55033-2022",
+        "GB 50108-2008 -> GB 55030-2022",
+        "GB 50207-2012 -> GB 55030-2022",
+        "GB 50345-2012 -> GB 55030-2022"
+      ],
+      "resolution": "removed false edges and set mandatory_clause_status=partially_repealed"
+    },
+    {
+      "issue": "partial-revision prose produced a false whole-standard replacement edge",
+      "examples": [
+        "GB 55028-2022 -> GB/T 50838-2015"
+      ],
+      "resolution": "excluded partial-revision notices from replacement parsing"
+    },
+    {
+      "issue": "rebuild retained stale staging-derived relation edges",
+      "resolution": "rebuild now replaces staging-derived edges while preserving seed/manual relations"
+    }
+  ],
+  "accepted_quality": {
+    "total_canonical": 1738,
+    "cross_verified": 206,
+    "single_source": 25,
+    "unknown": 1507,
+    "conflicts": 0,
+    "quarantined": 0,
+    "relations": 32,
+    "invalid_relation": 0,
+    "reverse_chronology": 0,
+    "publishable": true
+  },
+  "verification": {
+    "python_tests": "83 passed",
+    "golden_cases": "50/50 passed",
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "fresh_seed_import": "1738 standards, 32 relations, 230 normative documents; publishable=true"
+  },
+  "accepted": true
+}

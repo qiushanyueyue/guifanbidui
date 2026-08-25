@@ -7,6 +7,7 @@ import io
 import logging
 import os
 import urllib.parse
+from datetime import timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -117,6 +118,7 @@ def _result(db: Session, standard: StandardModel, *, source: str = "db") -> Sear
 def _result_v2(db: Session, standard: StandardV2Model, *, source: str = "db_v2") -> SearchResult:
     sources = StandardV2Repo.sources_for(db, standard.id)
     source_map = {item.source_name: item.source_url for item in sources if item.source_url}
+    source_names = sorted({item.source_name for item in sources if item.source_name})
     replaced_by_rows = (
         db.query(StandardV2RelationModel)
         .filter(StandardV2RelationModel.source_standard_id == standard.id)
@@ -145,7 +147,7 @@ def _result_v2(db: Session, standard: StandardV2Model, *, source: str = "db_v2")
         replaced_by=replaced_by,
         mandatory_clause_status=standard.mandatory_clause_status,
         issuing_authority=standard.issuing_authority,
-        canonical_source="soujianzhu+csres",
+        canonical_source="+".join(source_names) or None,
         verification_level=VerificationLevel(standard.verification_level),
         source_conflict=standard.source_conflict,
         last_verified_at=standard.last_verified_at,
@@ -306,10 +308,21 @@ def get_stats(db: Session = Depends(get_db)):
     repo = _repo(db)
     counts = repo.count_by_status(db)
     model = StandardV2Model if _use_v2(db) else StandardModel
-    last_verified = db.query(func.max(model.last_verified_at)).scalar()
+    if model is StandardV2Model:
+        last_updated = db.query(func.max(StandardV2Model.published_at)).scalar()
+        if last_updated is None:
+            last_updated = db.query(func.max(StandardV2Model.last_verified_at)).scalar()
+    else:
+        last_updated = db.query(func.max(StandardModel.last_verified_at)).scalar()
+    if last_updated is not None:
+        last_updated = (
+            last_updated.replace(tzinfo=timezone.utc)
+            if last_updated.tzinfo is None
+            else last_updated.astimezone(timezone.utc)
+        )
     return StatsResponse(
         count=sum(counts.values()),
-        last_updated=last_verified,
+        last_updated=last_updated,
         current=counts[StandardStatus.CURRENT.value],
         upcoming=counts[StandardStatus.UPCOMING.value],
         abolished=counts[StandardStatus.ABOLISHED.value],

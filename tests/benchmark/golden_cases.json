@@ -9,7 +9,7 @@
   {"id": 8, "code": "GB/T 50010-2010", "name": "混凝土结构设计标准", "expected_match_type": "revision_missing"},
   {"id": 9, "code": "GB/T 50010-2010（2024年版）", "name": "混凝土结构设计标准", "expected_match_type": "exact"},
   {"id": 10, "code": "GB/T 50011-2010", "name": "建筑抗震设计标准", "expected_match_type": "revision_missing"},
-  {"id": 11, "code": "JGJ l8-2012", "name": "钢筋焊接及验收规程", "expected_match_type": "unknown"},
+  {"id": 11, "code": "JGJ l8-2012", "name": "钢筋焊接及验收规程", "expected_match_type": "exact"},
   {"id": 12, "code": "", "name": "无障碍设计规范", "expected_match_type": "exact"},
   {"id": 13, "code": "GB 55037-2022", "name": "建筑防火通用规范", "expected_match_type": "exact"},
   {"id": 14, "code": "GB 55031-2022", "name": "民用建筑通用规范", "expected_match_type": "exact"},
