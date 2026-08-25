@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { api, type StandardInfo, type SearchResult } from './api';
+import { useState, useEffect, useCallback } from 'react';
+import { api, type StandardInfo, type SearchResult, type Stats } from './api';
 import { InputSection } from './components/InputSection';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ExportModal } from './components/ExportModal';
@@ -12,12 +12,12 @@ function App() {
 
   // Results Map for comparison
   const [resultsMap, setResultsMap] = useState<Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>>({});
-  const [stats, setStats] = useState<{ count: number; last_updated: string }>({ count: 0, last_updated: '' });
+  const [stats, setStats] = useState<Stats>({ count: 0, last_updated: null, current: 0, upcoming: 0, abolished: 0, replaced: 0, partially_amended: 0, unknown: 0, conflict: 0 });
 
   // Trigger for checking all standards
   const [checkTrigger, setCheckTrigger] = useState(0);
 
-  const checkStandard = async (code: string, name?: string) => {
+  const checkStandard = useCallback(async (code: string, name?: string, edition?: string | null) => {
     // Should check if either code OR name exists
     if (!code && !name) return;
 
@@ -30,7 +30,8 @@ function App() {
 
       // Priority 1: Search by Code (if exists)
       if (code) {
-        results = await api.searchStandard(code);
+        const lookupCode = edition ? `${code}（${edition}）` : code;
+        results = await api.searchStandard(lookupCode);
       }
 
       // Priority 2: If Code search fails (or no code), try Name
@@ -44,10 +45,10 @@ function App() {
       } else {
         setResultsMap(prev => ({ ...prev, [key]: 'not_found' }));
       }
-    } catch (err) {
+    } catch {
       setResultsMap(prev => ({ ...prev, [key]: 'error' }));
     }
-  };
+  }, []);
 
   // Listen for global check trigger
   useEffect(() => {
@@ -55,13 +56,13 @@ function App() {
       for (const std of standards) {
         // Always run check to update status in-place (no flicker)
         if (std.code || std.name) {
-          await checkStandard(std.code, std.name || undefined);
+          await checkStandard(std.code, std.name || undefined, std.edition || std.revision_year);
         }
       }
       setIsLoading(false);
     };
     runCheckAll();
-  }, [checkTrigger]);
+  }, [checkTrigger, standards, checkStandard]);
 
   useEffect(() => {
     api.getDatabaseStats().then(data => setStats(data)).catch(console.error);
@@ -76,9 +77,9 @@ function App() {
       if (extracted.length === 0) {
         alert('未提取到规范信息，请检查输入格式');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error extracting standards:', error);
-      const errorMsg = error.response?.data?.detail || error.message || '未知错误';
+      const errorMsg = error instanceof Error ? error.message : '未知错误';
       alert(`提取失败: ${errorMsg}\n\n请确认：\n1. 后端服务已启动 (http://localhost:8012)\n2. 网络连接正常`);
     } finally {
       setIsLoading(false);
@@ -152,7 +153,7 @@ function App() {
             </div>
             <div style={{ color: '#888', fontSize: '12px', textAlign: 'left', lineHeight: '1.6' }}>
               <div>说明：</div>
-              <div>1. 匹配状态：现行（绿色）、废止（红色）。</div>
+              <div>1. 匹配状态：现行（绿色）、待核验（灰色）、废止/替代（红色）。</div>
               <div>2. 输入结果与最新规范不一致时标记黄色背景。</div>
               <div>3. 结果仅供参考，必要时请以官方发布为准。</div>
 

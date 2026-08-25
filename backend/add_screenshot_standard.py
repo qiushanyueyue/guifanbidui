@@ -11,7 +11,7 @@ def add_screenshot_standard():
         std = StandardModel(
             code=code,
             name=name,
-            status="现行",
+            status="unknown",
             year="2016",
             publishing_department="天津市城乡建设委员会",
             implementation_date="2016-10-01",
@@ -26,7 +26,7 @@ def add_screenshot_standard():
         else:
             # Update fields if it exists
             existing.name = name
-            existing.status = "现行"
+            existing.status = "unknown"
             existing.year = "2016"
             existing.publishing_department = "天津市城乡建设委员会"
             existing.implementation_date = "2016-10-01"

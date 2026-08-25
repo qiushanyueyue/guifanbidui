@@ -67,7 +67,7 @@ const inputCode = "GB50157-2013";
 const result = {
     code: "GB 50157-2013",
     name: "地铁设计规范",
-    status: "现行"
+    status: "unknown"
 };
 
 const output = calculateMatchScore(inputName, inputCode, result);

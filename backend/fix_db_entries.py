@@ -19,7 +19,7 @@ def fix_standards():
         new_rfj = StandardModel(
             code="RFJ 02-2009",
             name="轨道交通工程人民防空设计规范",
-            status="现行",
+            status="unknown",
             year="2009"
         )
         existing_rfj = db.query(StandardModel).filter_by(code="RFJ 02-2009").first()
@@ -36,7 +36,7 @@ def fix_standards():
             new_xa = StandardModel(
                 code="DB13(J) 8330-2019",
                 name="雄安新区地下空间消防安全技术标准",
-                status="现行",
+                status="unknown",
                 year="2019"
             )
             db.add(new_xa)

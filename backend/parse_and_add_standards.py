@@ -1,5 +1,4 @@
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
 from app.models.base import SessionLocal
 from app.repositories.standard_repo import StandardRepo
@@ -11,11 +10,6 @@ from PIL import Image
 load_dotenv(".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    print("Error: GEMINI_API_KEY not found in environment variables.")
-    exit(1)
-
-genai.configure(api_key=GEMINI_API_KEY)
 
 IMAGE_PATHS = [
     "/Users/qiushanyueyue/.gemini/antigravity/brain/bbaeac4e-8e60-40fe-8cdb-8d618ebc311a/uploaded_media_1_1769752662593.jpg",
@@ -24,7 +18,16 @@ IMAGE_PATHS = [
 
 def extract_info_from_image(image_path):
     print(f"Processing {image_path}...")
+    if os.getenv("ENABLE_REMOTE_EXTRACTION", "false").lower() != "true":
+        print("Remote extraction is disabled; keeping image processing local.")
+        return None
+    if not GEMINI_API_KEY:
+        print("GEMINI_API_KEY is not configured.")
+        return None
     try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('models/gemini-2.0-flash-lite-001')
         # Load image
         img = Image.open(image_path)
@@ -76,7 +79,7 @@ def main():
                     sr = SearchResult(
                         code=code,
                         name=name,
-                        status="现行", # Assume active for newly added
+                        status="unknown", # New legacy records require verification
                         url="", # No URL known yet
                         source="manual_image_add"
                     )

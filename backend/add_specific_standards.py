@@ -15,7 +15,7 @@ def add_new_standards():
         std1 = StandardModel(
             code="RFJ02-2009", # User requested format
             name="轨道交通工程人民防空设计规范",
-            status="现行",
+            status="unknown",
             year="2009",
             url="http://www.csres.com/detail/199253.html"
         )
@@ -65,16 +65,16 @@ def add_new_standards():
                 std2 = StandardModel(
                     code=code2,
                     name=name2,
-                    status="现行", # Assume active? Need to check status field.
+                    status="unknown", # Requires source verification.
                     # Status often in: <font color="green">现行</font>
                     url=url2
                 )
                 
                 # Check status in HTML
                 if "废止" in html or "作废" in html:
-                    std2.status = "废止"
+                    std2.status = "abolished"
                 elif "现行" in html:
-                     std2.status = "现行"
+                     std2.status = "unknown"
                      
                 year_match = re.search(r"-(\d{4})", code2)
                 if year_match:

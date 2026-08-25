@@ -48,11 +48,11 @@ def add_csres_standards():
                 if code and name:
                     # Extract Status
                     # 标准状态：<a ...><font size=3><strong>现行</strong></font></a>
-                    status = "未知"
+                    status = "unknown"
                     if "现行" in html:
-                        status = "现行"
+                        status = "unknown"
                     if "废止" in html or "作废" in html:
-                         status = "废止"
+                         status = "abolished"
 
                     # Extract Year
                     year_match = re.search(r"-(\d{4})", code)

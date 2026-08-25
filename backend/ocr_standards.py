@@ -32,7 +32,13 @@ def parse_with_deepseek(ocr_text):
     import requests
     import json
     
-    api_key = os.getenv("DEEPSEEK_API_KEY") or "sk-e78399716a1f4878ac764f6dc87b238e"
+    if os.getenv("ENABLE_REMOTE_EXTRACTION", "false").lower() != "true":
+        print("Remote extraction is disabled; keeping OCR output local.")
+        return None
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        print("DEEPSEEK_API_KEY is not configured.")
+        return None
     
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -77,7 +83,7 @@ def main():
                 sr = SearchResult(
                     code=data['code'], 
                     name=data['name'], 
-                    status="现行", 
+                    status="unknown",
                     url="", 
                     source="ocr_deepseek"
                 )

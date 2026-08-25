@@ -1,155 +1,329 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from app.models.schemas import ExtractionRequest, ExtractionResponse, SearchRequest, SearchResponse, SearchResult, DetailRequest, StandardDetail
-from app.services.extractor import extract_standards_from_text, extract_year
-from app.services.crawler import search_csres
-from app.models.base import get_db
-from app.models.models import StandardModel
-from app.repositories.standard_repo import StandardRepo
-from app.services.excel_loader import excel_loader
-import os
-import datetime
+"""HTTP API; ordinary queries are database-only and never crawl third parties."""
 
+from __future__ import annotations
+
+import hmac
+import logging
+import os
+import urllib.parse
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session
+
+from app.models.base import database_is_configured, get_db
+from app.models.enums import StandardStatus, VerificationLevel, normalize_status, status_label
+from app.models.models import StandardHistoryModel, StandardModel, StandardSourceModel, SyncRunModel
+from app.models.schemas import (
+    DetailRequest,
+    ExtractionRequest,
+    ExtractionResponse,
+    HealthResponse,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+    SourceInfo,
+    StandardDetail,
+    StatsResponse,
+    SyncStatusResponse,
+    VerifyRequest,
+    VerifyResponse,
+)
+from app.repositories.standard_repo import StandardRepo
+from app.services.extractor import extract_standards_from_text
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Initialize Excel Loader (Default path handled in class)
-# excel_loader instance is already imported
+
+def _source_info(source: StandardSourceModel) -> SourceInfo:
+    return SourceInfo(
+        name=source.source_name,
+        url=source.source_url,
+        code=source.source_code,
+        name_text=source.source_name_text,
+        status=normalize_status(source.source_status),
+        raw_status=source.source_status,
+        fetched_at=source.fetched_at,
+        source_updated_at=source.source_updated_at,
+        parse_status=source.parse_status,
+    )
+
+
+def _result(db: Session, standard: StandardModel, *, source: str = "db") -> SearchResult:
+    sources = StandardRepo.sources_for(db, standard.id)
+    resolved_status = normalize_status(standard.status)
+    return SearchResult(
+        id=standard.id,
+        code=standard.code,
+        normalized_code=standard.normalized_code,
+        name=standard.name or "",
+        status=resolved_status,
+        status_label=status_label(resolved_status),
+        url=standard.canonical_url or standard.url,
+        source=source,
+        soujianzhu_url=standard.soujianzhu_url,
+        edition=standard.edition,
+        revision_year=standard.revision_year,
+        amendment=standard.amendment,
+        implement_date=standard.implement_date or standard.implementation_date,
+        publish_date=standard.publish_date,
+        abolish_date=standard.abolish_date,
+        replaces=standard.replaces,
+        replaced_by=standard.replaced_by,
+        article_status=standard.article_status,
+        mandatory_clause_status=standard.mandatory_clause_status,
+        issuing_authority=standard.issuing_authority or standard.publishing_department,
+        canonical_source=standard.canonical_source,
+        verification_level=VerificationLevel(standard.verification_level or VerificationLevel.UNVERIFIED.value),
+        source_conflict=bool(standard.source_conflict),
+        last_verified_at=standard.last_verified_at,
+        sources=[_source_info(item) for item in sources],
+    )
+
+
+def _detail(db: Session, standard: StandardModel) -> StandardDetail:
+    result = _result(db, standard)
+    payload = result.model_dump()
+    payload.update(
+        department=standard.issuing_authority or standard.publishing_department or "-",
+        release_date=standard.publish_date or "-",
+        implement_date=standard.implement_date or standard.implementation_date or "-",
+        drafting_unit="-",
+        technical_committee="-",
+        ccs="-",
+        englishName="-",
+        ics="-",
+        publisher="-",
+        pages="-",
+        obsolete_date=standard.abolish_date or "-",
+    )
+    return StandardDetail(**payload)
+
+
+def _latest_sync(db: Session) -> SyncRunModel | None:
+    return (
+        db.query(SyncRunModel)
+        .filter(SyncRunModel.finished_at.isnot(None))
+        .order_by(SyncRunModel.finished_at.desc())
+        .first()
+    )
+
+
+def _health_payload(db: Session) -> HealthResponse:
+    database = "ok"
+    try:
+        db.execute(text("SELECT 1"))
+        if not database_is_configured():
+            database = "warning"
+    except Exception:
+        database = "error"
+    latest = _latest_sync(db)
+    sources: dict[str, str] = {name: "never" for name in ("samr", "mohurd", "openstd", "soujianzhu", "csres")}
+    for row in db.query(SyncRunModel).order_by(SyncRunModel.finished_at.desc()).limit(20).all():
+        if row.source not in sources or sources[row.source] != "never":
+            continue
+        sources[row.source] = row.status
+    # A third-party outage is reported per-source and does not take the API
+    # down when the database itself remains healthy.
+    overall = "ok" if database == "ok" else "degraded"
+    return HealthResponse(
+        status=overall,
+        database=database,
+        last_sync=latest.finished_at if latest else None,
+        sources=sources,
+    )
+
 
 @router.post("/extract", response_model=ExtractionResponse)
 def extract_standards(request: ExtractionRequest):
-    """
-    接收文本，返回提取到的规范列表
-    """
-    standards = extract_standards_from_text(request.text)
-    return ExtractionResponse(standards=standards)
+    return ExtractionResponse(standards=extract_standards_from_text(request.text))
+
+
+def _search(db: Session, keyword: str, limit: int = 20) -> SearchResponse:
+    keyword = keyword.strip()
+    if not keyword:
+        return SearchResponse(results=[])
+    standards = StandardRepo.search(db, keyword, limit=limit)
+    return SearchResponse(results=[_result(db, standard) for standard in standards])
+
 
 @router.post("/search", response_model=SearchResponse)
 def search_standard_endpoint(request: SearchRequest, db: Session = Depends(get_db)):
-    """
-    根据关键字搜索规范 (优先查库 -> 爬虫 -> Excel兜底)
-    并附加 Excel 中的链接信息
-    """
-    keyword = request.keyword.strip()
-    
-    # Apply OCR cleaning to keyword (e.g. "l8" -> "18")
-    from app.services.extractor import clean_code
-    keyword = clean_code(keyword)
-    
-    results = []
+    return _search(db, request.keyword)
 
-    # 1. 尝试从数据库查找 (精确匹配 code)
-    cached_std = StandardRepo.get_by_code(db, keyword)
-    if cached_std:
-        results.append(SearchResult(
-            code=cached_std.code,
-            name=cached_std.name,
-            status=cached_std.status,
-            url=cached_std.url,
-            source="db"
-        ))
-    
-    # 2. 如果数据库没找到，爬虫搜索
-    if not results:
-        results_data = search_csres(keyword)
-        for data in results_data:
-            data["source"] = "online"
-            sr = SearchResult(**data)
-            year = extract_year(sr.code)
-            StandardRepo.create_or_update(db, sr, year)
-            results.append(sr)
 
-    # 3. 如果爬虫也没找到，尝试从 Excel 查找 (兜底)
-    if not results:
-        from app.services.excel_loader import excel_loader
-        excel_result = excel_loader.search_by_code(keyword)
-        if excel_result:
-            results.append(SearchResult(
-                code=excel_result["code"],
-                name=excel_result["name"],
-                status="现行", # Default
-                url="",
-                source="excel",
-                soujianzhu_url=excel_result.get("soujianzhu_url")
-            ))
+@router.get("/standards/search", response_model=SearchResponse)
+def search_standards(q: str = Query(min_length=1, max_length=200), limit: int = Query(default=20, ge=1, le=100), db: Session = Depends(get_db)):
+    return _search(db, q, limit=limit)
 
-    # 4. 统一附加 Excel 中的链接信息 (Soujianzhu URL)
-    from app.services.excel_loader import excel_loader
-    for result in results:
-        # Try lookup by code
-        excel_match = excel_loader.search_by_code(result.code)
-        
-        # If not match by code, try lookup by name
-        if not excel_match and result.name:
-            excel_match = excel_loader.search_by_name(result.name)
-            
-        # If still no match, try fuzzy name match (as requested by user "matches name is enough")
-        if not excel_match and result.name:
-            excel_match = excel_loader.search_fuzzy(result.name)
-            
-        if excel_match:
-             result.soujianzhu_url = excel_match.get("soujianzhu_url")
 
-    return SearchResponse(results=results)
+@router.get("/standards/code/{code:path}", response_model=StandardDetail)
+def get_standard_by_code(code: str, db: Session = Depends(get_db)):
+    standard = StandardRepo.get_by_code(db, code)
+    if standard is None:
+        raise HTTPException(status_code=404, detail="standard not found")
+    return _detail(db, standard)
+
+
+@router.get("/standards/{standard_id}", response_model=StandardDetail)
+def get_standard_by_id(standard_id: int, db: Session = Depends(get_db)):
+    standard = StandardRepo.get_by_id(db, standard_id)
+    if standard is None:
+        raise HTTPException(status_code=404, detail="standard not found")
+    return _detail(db, standard)
+
+
+@router.get("/standards/{standard_id}/sources", response_model=list[SourceInfo])
+def get_standard_sources(standard_id: int, db: Session = Depends(get_db)):
+    if StandardRepo.get_by_id(db, standard_id) is None:
+        raise HTTPException(status_code=404, detail="standard not found")
+    return [_source_info(source) for source in StandardRepo.sources_for(db, standard_id)]
+
+
+@router.get("/standards/{standard_id}/history")
+def get_standard_history(standard_id: int, db: Session = Depends(get_db)):
+    if StandardRepo.get_by_id(db, standard_id) is None:
+        raise HTTPException(status_code=404, detail="standard not found")
+    return [
+        {
+            "id": item.id,
+            "changed_at": item.changed_at,
+            "field": item.field_name,
+            "old": item.old_value,
+            "new": item.new_value,
+            "source": item.source,
+        }
+        for item in db.query(StandardHistoryModel)
+        .filter(StandardHistoryModel.standard_id == standard_id)
+        .order_by(StandardHistoryModel.changed_at.desc())
+        .all()
+    ]
+
 
 @router.post("/detail", response_model=StandardDetail)
-def get_standard_detail_endpoint(request: DetailRequest):
-    """
-    获取规范详情 (实时爬取)
-    """
-    from app.services.crawler import get_standard_detail, search_csres
-    
-    target_url = request.url
-    
-    # If no URL provided (e.g. from Excel source), try to find it online first
-    if not target_url and request.code:
-        # Search online to find the URL
-        results = search_csres(request.code)
-        if results:
-            # Pick the best match or the first one
-            target_url = results[0].get("url")
-    
-    if not target_url:
-        return StandardDetail()
-        
-    detail_data = get_standard_detail(target_url)
-    return StandardDetail(**detail_data)
+def get_standard_detail_endpoint(request: DetailRequest, db: Session = Depends(get_db)):
+    standard = StandardRepo.get_by_id(db, request.id) if request.id else None
+    if standard is None and request.code:
+        standard = StandardRepo.get_by_code(db, request.code)
+    if standard is None and request.url:
+        standard = StandardRepo.get_by_source_url(db, request.url)
+    if standard is None:
+        # Keep the legacy modal contract without claiming a missing result is
+        # current or performing a live third-party request.
+        return StandardDetail(code=request.code or "", name="", status=StandardStatus.UNKNOWN)
+    return _detail(db, standard)
 
-@router.get("/stats")
+
+@router.get("/stats", response_model=StatsResponse)
 def get_stats(db: Session = Depends(get_db)):
-    """
-    获取数据库统计信息
-    """
-    # Source stats from the Excel loader instead of the local DB (which is often empty/ephemeral)
-    from app.services.excel_loader import excel_loader
-    import os
-    import datetime
-    
-    # 1. Get Count (Fixed as per user request to > 1700)
-    # total_count = len(excel_loader._standards_map)
-    # Force fixed value to ensure display is correct regardless of loading state
-    total_count = 1768
-    
-    # 2. Get Last Updated Date (Fixed as per user request)
-    last_updated_str = "2026.01.30"
-        
-    return {
-        "count": total_count,
-        "last_updated": last_updated_str
-    }
+    counts = StandardRepo.count_by_status(db)
+    last_verified = db.query(func.max(StandardModel.last_verified_at)).scalar()
+    return StatsResponse(
+        count=sum(counts.values()),
+        last_updated=last_verified,
+        current=counts[StandardStatus.CURRENT.value],
+        upcoming=counts[StandardStatus.UPCOMING.value],
+        abolished=counts[StandardStatus.ABOLISHED.value],
+        replaced=counts[StandardStatus.REPLACED.value],
+        partially_amended=counts[StandardStatus.PARTIALLY_AMENDED.value],
+        unknown=counts[StandardStatus.UNKNOWN.value],
+        conflict=counts[StandardStatus.CONFLICT.value],
+    )
+
+
+@router.get("/sync/status", response_model=SyncStatusResponse)
+def get_sync_status(db: Session = Depends(get_db)):
+    latest = _latest_sync(db)
+    if latest is None:
+        return SyncStatusResponse(latest=None)
+    return SyncStatusResponse(
+        latest={
+            "id": latest.id,
+            "source": latest.source,
+            "started_at": latest.started_at,
+            "finished_at": latest.finished_at,
+            "status": latest.status,
+            "found": latest.found,
+            "inserted": latest.inserted,
+            "updated": latest.updated,
+            "unchanged": latest.unchanged,
+            "failed": latest.failed,
+            "error_message": latest.error_message,
+        }
+    )
+
+
+@router.get("/health", response_model=HealthResponse)
+def health_check(db: Session = Depends(get_db)):
+    return _health_payload(db)
+
+
+@router.post("/v1/verify", response_model=VerifyResponse)
+def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
+    standard = StandardRepo.get_by_code(db, request.code)
+    if standard is None and request.name:
+        matches = StandardRepo.search(db, request.name, limit=1)
+        standard = matches[0] if matches else None
+    if standard is None:
+        return VerifyResponse(input_code=request.code, status=StandardStatus.UNKNOWN)
+    result = _result(db, standard)
+    return VerifyResponse(
+        input_code=request.code,
+        canonical_code=result.normalized_code or result.code,
+        name=result.name,
+        status=result.status,
+        current_edition=result.edition,
+        replaced_by=result.replaced_by,
+        publish_date=result.publish_date,
+        implement_date=result.implement_date,
+        verification_level=result.verification_level,
+        sources=result.sources,
+        last_verified_at=result.last_verified_at,
+    )
+
 
 @router.get("/redirect_csres")
-def redirect_csres(keyword: str):
-    """
-    Generate a CSRES search URL with GBK encoded keyword.
-    Client-side encoding of Chinese characters to GBK is difficult, so we do it here.
-    """
+def redirect_csres(keyword: str = Query(max_length=200)):
     try:
-        # Encode to GBK
-        gbk_bytes = keyword.encode('gbk')
-        # URL encode the bytes
-        import urllib.parse
-        encoded_keyword = urllib.parse.quote(gbk_bytes)
-        return {"url": f"http://www.csres.com/s.jsp?keyword={encoded_keyword}"}
-    except Exception as e:
-        # Fallback if encoding fails (though unlikely for Chinese text)
-        return {"url": f"http://www.csres.com/s.jsp?keyword={keyword}"}
+        encoded_keyword = urllib.parse.quote(keyword.encode("gbk"))
+    except UnicodeEncodeError:
+        encoded_keyword = urllib.parse.quote(keyword)
+    return {"url": f"https://www.csres.com/s.jsp?keyword={encoded_keyword}"}
+
+
+def _require_cron_secret(authorization: str | None) -> None:
+    configured = os.getenv("CRON_SECRET", "").strip()
+    if not configured:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="CRON_SECRET is not configured")
+    expected = f"Bearer {configured}"
+    if not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
+
+
+@router.get("/cron/health", response_model=HealthResponse)
+def cron_health(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    _require_cron_secret(authorization)
+    return _health_payload(db)
+
+
+@router.get("/cron/status", response_model=SyncStatusResponse)
+def cron_status(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Protected lightweight status probe; heavy crawling remains in Actions."""
+    _require_cron_secret(authorization)
+    latest = _latest_sync(db)
+    if latest is None:
+        return SyncStatusResponse(latest=None)
+    return SyncStatusResponse(
+        latest={
+            "id": latest.id,
+            "source": latest.source,
+            "finished_at": latest.finished_at,
+            "status": latest.status,
+            "found": latest.found,
+            "inserted": latest.inserted,
+            "updated": latest.updated,
+            "unchanged": latest.unchanged,
+            "failed": latest.failed,
+        }
+    )

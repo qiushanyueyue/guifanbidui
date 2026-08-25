@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './StandardDetailModal.css';
-import { api, type SearchResult, type StandardDetail } from '../api';
+import { api, isInactiveStatus, statusLabel, type SearchResult, type StandardDetail } from '../api';
 
 interface StandardDetailModalProps {
     isOpen: boolean;
@@ -18,45 +18,43 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
     identifiedCode
 }) => {
     const [fullDetail, setFullDetail] = useState<StandardDetail | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
     const [redirectUrl, setRedirectUrl] = useState<string>('');
+    const detailKey = detail ? `${detail.id ?? ''}:${detail.code}` : '';
+    const [loadedKey, setLoadedKey] = useState('');
 
 
     useEffect(() => {
         if (isOpen && detail) {
-            setFullDetail(null);
-            setRedirectUrl(''); // Reset
-
-            // If we have a direct URL, fetch detail
-            if (detail.url) {
-                setIsLoading(true);
-                api.getStandardDetail(detail.url, detail.code)
-                    .then(data => setFullDetail(data))
-                    .catch(err => console.error("Failed to fetch detail", err))
-                    .finally(() => setIsLoading(false));
-            } else {
-                // If NO URL (Search Mode), generate redirect URL via backend
-                const keyword = detail.name || detail.code || '';
-                if (keyword) {
-                    api.getCsresRedirectUrl(keyword)
-                        .then(url => setRedirectUrl(url))
-                        .catch(err => console.error("Failed to get redirect url", err));
-                }
+            api.getStandardDetail(detail.url || undefined, detail.code)
+                .then(data => {
+                    setFullDetail(data);
+                    setLoadedKey(detailKey);
+                })
+                .catch(err => {
+                    console.error("Failed to fetch detail", err);
+                    setLoadedKey(detailKey);
+                })
+            const keyword = detail.name || detail.code || '';
+            if (keyword && !detail.url) {
+                api.getCsresRedirectUrl(keyword)
+                    .then(url => setRedirectUrl(url))
+                    .catch(err => console.error("Failed to get redirect url", err));
             }
         }
-    }, [isOpen, detail]);
+    }, [isOpen, detail, detailKey, detail?.url, detail?.name, detail?.code]);
 
     if (!isOpen || !detail) return null;
 
     // Determine Status Class
     const getStatusClass = (status: string) => {
         if (!status) return '';
-        if (status.includes('现行')) return 'active';
-        if (status.includes('废止') || status.includes('作废')) return 'abolished';
+        if (status === 'current') return 'active';
+        if (isInactiveStatus(status)) return 'abolished';
         return '';
     };
 
     const targetUrl = fullDetail?.url || detail.url || redirectUrl;
+    const isLoading = loadedKey !== detailKey;
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -92,14 +90,14 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                                         </div>
                                     </div>
                                 )}
-                                <div className="timeline-item current">
+                                <div className={`timeline-item ${detail.status === 'current' ? 'current' : ''}`}>
                                     <div className="timeline-dot"></div>
                                     <div className="timeline-content">
                                         <div className="timeline-text" style={{ fontWeight: 'bold' }}>{detail.name}</div>
                                         <div className="timeline-code">{detail.code}</div>
                                         {detail.status && (
-                                            <div className={detail.status.includes('现行') ? 'current-tag' : 'abolished-tag'}>
-                                                {detail.status}
+                                            <div className={detail.status === 'current' ? 'current-tag' : 'abolished-tag'}>
+                                                {detail.status_label || statusLabel(detail.status)}
                                             </div>
                                         )}
                                     </div>
@@ -110,7 +108,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                                         <div className="timeline-content">
                                             <div className="timeline-tag">被替代为:</div>
                                             <div className="timeline-text">{fullDetail.replaced_by}</div>
-                                            <div className="current-tag">现行</div>
+                                            <div className="current-tag">后续规范（待核验）</div>
                                         </div>
                                     </div>
                                 )}
@@ -125,14 +123,14 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                             <div className="header-meta">
                                 <span>规范编号: {detail.code}</span>
                                 {detail.status && <span className={`status-tag ${getStatusClass(detail.status)}`}>
-                                    {detail.status}
+                                    {detail.status_label || statusLabel(detail.status)}
                                 </span>}
                             </div>
                             <div className="header-badges">
                                 <span className="header-match high">匹配度 100%</span>
                                 <span className="header-match" style={{ marginLeft: '10px' }}>发布日期 {fullDetail?.release_date || '-'}</span>
-                                {fullDetail?.status?.includes('废止') && (
-                                    <span className="header-match" style={{ marginLeft: '10px' }}>废止日期 {(fullDetail as any).obsolete_date || '-'}</span>
+                                {fullDetail && isInactiveStatus(fullDetail.status) && (
+                                    <span className="header-match" style={{ marginLeft: '10px' }}>废止日期 {fullDetail.obsolete_date || '-'}</span>
                                 )}
                                 <span className="header-match" style={{ marginLeft: '10px' }}>实施日期 {fullDetail?.implement_date || '-'}</span>
                             </div>
@@ -141,7 +139,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                         {isLoading ? (
                             <div style={{ padding: '40px', textAlign: 'center', color: '#666', marginTop: '20px' }}>
                                 <div className="loading-spinner" style={{ marginBottom: '10px' }}></div>
-                                正在从工标网获取最新数据...
+                                正在从本地规范数据库读取...
                             </div>
                         ) : (
                             <>

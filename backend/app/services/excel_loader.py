@@ -3,6 +3,8 @@ import re
 from typing import Optional, Dict
 import os
 import logging
+from difflib import SequenceMatcher
+from app.services.standard_normalizer import normalize_standard_code, normalized_name
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +39,8 @@ class ExcelLoader:
             # Log the resolved path
             try:
                 logger.info(f"Resolved Excel path: {path_to_load} (CWD: {os.getcwd()})")
-            except:
-                pass
+            except Exception as exc:
+                logger.debug("failed to log Excel path: %s", exc.__class__.__name__)
             
             cls._instance.load_data(path_to_load)
         return cls._instance
@@ -149,16 +151,11 @@ class ExcelLoader:
                 self._name_map[norm_name] = entry
 
     def _normalize_code(self, code: str) -> str:
-        """Remove spaces and convert to uppercase for consistent lookups"""
-        if not code: return ""
-        return re.sub(r"\s+", "", str(code)).upper()
+        """Use the shared context-aware code normalizer."""
+        return normalize_standard_code(code)
 
     def _normalize_name(self, name: str) -> str:
-        """Remove spaces for consistent name lookups"""
-        if not name: return ""
-        # First clean the name of artifacts like (共二册)
-        clean = self._clean_name_text(str(name))
-        return re.sub(r"\s+", "", clean).strip()
+        return normalized_name(name)
 
     def _clean_name_text(self, name: str) -> str:
         """Clean specific suffixes from name"""
@@ -177,29 +174,21 @@ class ExcelLoader:
         return self._name_map.get(normalized_query)
 
     def search_fuzzy(self, name: str) -> Optional[dict]:
-        """
-        Fuzzy search for Soujianzhu links.
-        Returns match if:
-        1. Query name is contained in Standard name
-        2. Standard name is contained in Query name
-        """
+        """Fuzzy search with a threshold; low-confidence links are rejected."""
         if not name or len(name) < 2:
             return None
             
         normalized_query = self._normalize_name(name)
-        
-        # Iterate all unique standards
-        # (This is O(N) but N ~3700 is negligible for Python)
+        best = None
+        best_score = 0.0
         for std in self._standards_map.values():
             std_name = std.get("name", "")
             if not std_name: continue
-            
             norm_std_name = self._normalize_name(std_name)
-            
-            if normalized_query in norm_std_name or norm_std_name in normalized_query:
-                return std
-                
-        return None
+            score = SequenceMatcher(None, normalized_query, norm_std_name).ratio()
+            if score > best_score:
+                best, best_score = std, score
+        return best if best_score >= 0.86 else None
 
     def _inject_manual_data(self):
         """Inject manually provided standards that are missing from Excel"""

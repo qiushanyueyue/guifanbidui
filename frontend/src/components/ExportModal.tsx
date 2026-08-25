@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './StandardDetailModal.css'; // Reuse modal styles or create new one
 
-import { type StandardInfo, type SearchResult } from '../api';
+import { isInactiveStatus, type StandardInfo, type SearchResult } from '../api';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -19,6 +19,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
     useEffect(() => {
         if (!isOpen) return;
         generatePreview();
+    // generatePreview is local and intentionally recreated with modal props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, showIndex, wrapName, wrapCode, standards, resultsMap]);
 
     const generatePreview = () => {
@@ -29,21 +31,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
             const result = resultsMap[std.code || std.name || 'unknown'];
             const hasMatch = result && typeof result === 'object';
 
-            // Check validity condition: Must be matched AND '现行' (Active)
-            // If it's abolished ("废止", "作废"), we exclude it from the RIGHT side.
-            const isAbolished = hasMatch && (result.status.includes('废止') || result.status.includes('作废') || result.status.includes('被替'));
-            const isUnmatched = !hasMatch;
+            // Unknown/conflict records must not be presented as verified
+            // current citations. Abolished/replaced records are also omitted.
+            const isInactive = hasMatch && isInactiveStatus(result.status);
+            const isUnverified = hasMatch && ['unknown', 'conflict'].includes(result.status);
+            const isUnmatched = !hasMatch || isInactive || isUnverified;
 
             // Strict 100% check:
             // 1. Must match
-            // 2. Must NOT be abolished
+            // 2. Must be verified enough for an export (not abolished,
+            // replaced, unknown, or source-conflicted)
             // 3. Name and Code must roughly match (though we use the matched result, so consistency is implied if we trust the result. 
             //    But user said "100% no problem". If we found a result but it has a different year, it's usually considered a match 
             //    but maybe we should only check status.)
             // The user request says: "Right side displayed must be 100% no problem". 
             // Usually this means valid, active standards.
 
-            if (isUnmatched || isAbolished) {
+            if (isUnmatched) {
                 return; // Skip this standard in preview
             }
 
@@ -125,7 +129,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                                         const result = resultsMap[std.code || std.name || 'unknown'];
                                         const hasMatch = result && typeof result === 'object';
 
-                                        const isAbolished = hasMatch && (result.status.includes('废止') || result.status.includes('作废') || result.status.includes('被替'));
+                                        const isAbolished = hasMatch && isInactiveStatus(result.status);
 
                                         // Compare
                                         const isCodeDifferent = hasMatch && !isAbolished && (std.code.replace(/\s/g, '').toUpperCase() !== result.code.replace(/\s/g, '').toUpperCase());

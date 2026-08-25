@@ -19,7 +19,7 @@ def fix_db():
         jgj = db.query(StandardModel).filter(StandardModel.code == "JGJ 145-2013").first()
         if jgj:
             print(f"Found JGJ 145-2013: Status={jgj.status}, ID={jgj.id}")
-            jgj.status = "现行"
+            jgj.status = "unknown"
             print("Updated status to '现行'")
         else:
             print("JGJ 145-2013 not found!")

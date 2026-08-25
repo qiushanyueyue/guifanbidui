@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api, type StandardInfo, type SearchResult } from '../api';
+import { api, isInactiveStatus, statusLabel, type StandardInfo, type SearchResult, type Stats } from '../api';
 import { StandardDetailModal } from './StandardDetailModal';
 import { FeedbackModal } from './FeedbackModal';
 import { openCsresSearch } from '../utils/csres';
@@ -7,13 +7,13 @@ import { openCsresSearch } from '../utils/csres';
 interface ComparisonTableProps {
     standards: StandardInfo[];
     resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>; // New Prop
-    onCheckSingle: (code: string, name?: string) => Promise<void>; // New Prop
+    onCheckSingle: (code: string, name?: string, edition?: string | null) => Promise<void>; // New Prop
     onClear?: () => void;
     onAdd?: () => void;
     onRemove?: (index: number) => void;
     onUpdate?: (index: number, field: keyof StandardInfo, value: string) => void;
     checkTrigger?: number; // Kept for backward compat if needed, but logic moved up
-    stats?: { count: number; last_updated: string }; // New Prop
+    stats?: Stats;
 }
 
 export const ComparisonTable: React.FC<ComparisonTableProps> = ({
@@ -69,7 +69,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                 <h2>2. 识别结果</h2>
                 <div style={{ fontSize: '12px', color: '#666' }}>
                     {stats ? (
-                        <>当前收录全行业规范 {stats.count} 条 · 更新日期 {stats.last_updated.replace(/-/g, '.')}</>
+                        <>当前收录规范 {stats.count} 条 · 最近核验 {stats.last_updated ? stats.last_updated.replace(/-/g, '.').slice(0, 16) : '暂无'}</>
                     ) : (
                         '加载统计中...'
                     )}
@@ -103,7 +103,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                             standard={std}
                             // Use code as primary key, fallback to name
                             resultStatus={resultsMap[std.code || std.name || 'unknown']}
-                            onCheck={() => onCheckSingle(std.code, std.name || undefined)}
+                            onCheck={() => onCheckSingle(std.code, std.name || undefined, std.edition || std.revision_year)}
                             onViewDetail={(result) => handleViewDetail(result, std)}
                             onRemove={() => onRemove && onRemove(index)}
                             onUpdate={(field, value) => onUpdate && onUpdate(index, field, value)}
@@ -177,7 +177,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
         } else {
             // Simple overlap check
             let matchCount = 0;
-            for (let char of normSourceName) {
+            for (const char of normSourceName) {
                 if (normResultName.includes(char)) matchCount++;
             }
             const similarity = matchCount / Math.max(normSourceName.length, normResultName.length);
@@ -259,9 +259,9 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
     const [isFetchingReplacement, setIsFetchingReplacement] = React.useState(false);
 
     React.useEffect(() => {
-        if (result && (result.status.includes('废止') || result.status.includes('作废') || result.status.includes('被替')) && !replacementInfo && !isFetchingReplacement) {
+        if (result && isInactiveStatus(result.status) && !replacementInfo && !isFetchingReplacement) {
             setIsFetchingReplacement(true);
-            api.getStandardDetail(result.url, result.code)
+            api.getStandardDetail(result.url || undefined, result.code)
                 .then(detail => {
                     // Prioritize structured "replaced by" info
                     if (detail.replaced_by_code) {
@@ -280,7 +280,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                     setIsFetchingReplacement(false);
                 });
         }
-    }, [result]);
+    }, [result, replacementInfo, isFetchingReplacement]);
 
     return (
         <tr style={{ borderBottom: '1px solid #f0f0f0', height: '55px' }}>
@@ -336,7 +336,16 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                 )}
 
                 {result && (
-                    <span>{result.name} {result.code}</span>
+                    <div>
+                        <div>{result.name} {result.code}</div>
+                        <div style={{ fontSize: '11px', color: '#777', marginTop: '3px' }}>
+                            版本：{result.edition || result.revision_year || '原始版本'} · 来源：{result.canonical_source || '待核验'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#999' }}>
+                            最近核验：{result.last_verified_at ? result.last_verified_at.slice(0, 10) : '暂无'}
+                            {result.source_conflict ? ' · 来源冲突' : ''}
+                        </div>
+                    </div>
                 )}
             </td>
 
@@ -358,13 +367,13 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
                 {result && (
                     <span style={{
-                        background: result.status.includes('现行') ? '#f0fdf4' : '#fef2f2',
-                        color: result.status.includes('现行') ? '#15803d' : '#b91c1c',
+                        background: result.status === 'current' ? '#f0fdf4' : result.status === 'unknown' ? '#f3f4f6' : '#fef2f2',
+                        color: result.status === 'current' ? '#15803d' : result.status === 'unknown' ? '#6b7280' : '#b91c1c',
                         padding: '2px 8px',
                         borderRadius: '2px',
                         fontSize: '12px'
                     }}>
-                        {result.status}
+                        {result.status_label || statusLabel(result.status)}
                     </span>
                 )}
                 {resultStatus === 'not_found' && (
@@ -390,7 +399,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                 fontSize: '13px'
             }}>
                 {/* 1. If Abolished, show replacement info */}
-                {result && (result.status.includes('废止') || result.status.includes('作废') || result.status.includes('被替')) ? (
+                {result && isInactiveStatus(result.status) ? (
                     isFetchingReplacement ? (
                         <span style={{ color: '#666', fontStyle: 'italic' }}>查询最新规范中...</span>
                     ) : (
