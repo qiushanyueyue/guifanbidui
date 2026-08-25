@@ -1,5 +1,7 @@
 # 规范对比项目交接文档 (Project Handoff Summary)
 
+> **历史文档警告（2026-08-25）**：本文原有架构、端口、数据库、Gemini/实时爬虫和生产描述可能已经过时，不是当前真相。新对话必须先阅读 [`AGENTS.md`](AGENTS.md)、[`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md)、[`MEMORY.md`](MEMORY.md) 和 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，并按其中证据重新验证；本文仅用于解释旧项目背景。
+
 ## 1. 项目概览 (Project Overview)
 本项目是一个 **建筑设计规范自动合规性校验工具**。主要用于解决设计说明中引用的规范版本过时的问题。
 核心功能是：输入一大段设计说明文本，系统自动提取其中的规范名称和编号，实时去工标网 (`csres.com`) 检索最新状态（现行/废止/被替代），并给出合规性报告。
