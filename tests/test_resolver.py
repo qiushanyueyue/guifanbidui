@@ -34,3 +34,12 @@ def test_same_priority_official_conflict_uses_conflict_status():
     ])
     assert decision["status"].value == "conflict"
     assert decision["verification_level"].value == "conflict"
+
+
+def test_third_party_status_conflict_is_not_silently_prioritized():
+    decision = resolve_status([
+        StandardSourceModel(source_name="soujianzhu", source_status="现行", parse_status="ok"),
+        StandardSourceModel(source_name="csres", source_status="废止", parse_status="ok"),
+    ])
+    assert decision["status"].value == "conflict"
+    assert decision["verification_level"].value == "conflict"

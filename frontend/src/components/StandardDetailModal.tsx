@@ -127,7 +127,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                                 </span>}
                             </div>
                             <div className="header-badges">
-                                <span className="header-match high">匹配度 100%</span>
+                                <span className="header-match high">{detail.message || '数据库记录'}</span>
                                 <span className="header-match" style={{ marginLeft: '10px' }}>发布日期 {fullDetail?.release_date || '-'}</span>
                                 {fullDetail && isInactiveStatus(fullDetail.status) && (
                                     <span className="header-match" style={{ marginLeft: '10px' }}>废止日期 {fullDetail.obsolete_date || '-'}</span>

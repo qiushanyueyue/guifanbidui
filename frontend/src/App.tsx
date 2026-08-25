@@ -28,15 +28,15 @@ function App() {
     try {
       let results: SearchResult[] = [];
 
-      // Priority 1: Search by Code (if exists)
-      if (code) {
-        const lookupCode = edition ? `${code}（${edition}）` : code;
-        results = await api.searchStandard(lookupCode);
+      // Compare the user's name and code together through the business API.
+      if (code || name) {
+        const inputCode = edition ? `${code}（${edition}）` : code;
+        const verified = await api.verifyStandard(inputCode, name);
+        results = verified.result ? [verified.result] : [];
       }
 
       // Priority 2: If Code search fails (or no code), try Name
       if ((!results || results.length === 0) && name) {
-        // console.log(`Code search failed/skipped for ${code}, trying name: ${name}`);
         results = await api.searchStandard(name);
       }
 

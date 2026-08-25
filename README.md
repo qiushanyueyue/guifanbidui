@@ -64,12 +64,15 @@ PYTHONPATH=backend python scripts/import_legacy_excel.py --path backend/standard
 - `GET /api/sync/status`
 - `GET /api/health`
 - `POST /api/v1/verify`（只接收规范名称/编号，不接收设计说明、图纸或内部资料）
+- `POST /api/export`（导出包含判定、建议引用和双源链接的 Excel）
+
+WorkBuddy 可直接调用公网只读入口 `POST https://guifan.108923.xyz/api/v1/verify`。请求示例和可复制提示词见 [`docs/workbuddy.md`](docs/workbuddy.md)。普通调用只查数据库，不会触发现场爬取。
 
 状态值固定为 `current`、`upcoming`、`abolished`、`replaced`、`partially_amended`、`unknown`、`conflict`，前端再映射为中文标签。无法核验时是 `unknown/待核验`，不会默认显示现行。
 
 ## 数据与同步
 
-`standards` 保存规范身份、版本和最终决策，并预留 `article_status`、`mandatory_clause_status` 以区分整本规范状态与强制性条文/条文级变化；`standard_sources` 保存每个来源的原始状态与 `content_hash`；`standard_relations` 保存替代、修订关系；`sync_runs` 保存每次同步的计数和失败原因；`standard_history` 保存字段变更历史。官方来源（SAMR/MOHURD）优先于 OpenSTD，再优先于搜建筑/工标网；同等级状态冲突会保留冲突并标记 `conflict`。
+`standards_v2` 保存规范身份、版本和最终决策，并预留 `mandatory_clause_status` 以区分整本规范状态与强制性条文/条文级变化；`standard_v2_sources` 保存搜建筑和工标网证据 URL；`standard_v2_relations` 保存替代、修订关系；`sync_runs` 保存每次同步的计数和失败原因。第三方来源冲突会保留并标记 `conflict`，来源失败不会转换成现行。
 
 来源适配器位于 `backend/app/sources/`。CSRES 和搜建筑已提供带限速、重试、超时、编码检测、结构校验和 fixture 解析器的适配器；官方平台适配器要求通过环境变量提供公开元数据端点，未配置或页面结构不明确时会记录失败而不编造数据。
 

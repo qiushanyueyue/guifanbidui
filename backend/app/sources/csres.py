@@ -23,6 +23,21 @@ def _status_text(value: str) -> str:
     return re.sub(r"\s+", "", value or "").strip("-：:")
 
 
+def parse_csres_replacement_text(value: str | None) -> tuple[list[str], list[str]]:
+    """Split the old and new sides of CSRES compound replacement prose."""
+
+    raw = str(value or "").strip()
+    if not raw:
+        return [], []
+    if "被" in raw:
+        before, after = raw.split("被", 1)
+        replaces = [item.normalized for item in extract_standard_codes(before)]
+        replaced_by = [item.normalized for item in extract_standard_codes(after)]
+        return replaces, replaced_by
+    codes = [item.normalized for item in extract_standard_codes(raw)]
+    return codes, []
+
+
 def parse_csres_search_html(html: str, *, base_url: str = BASE_URL) -> list[SourceRecord]:
     soup = BeautifulSoup(html, "html.parser")
     tables = soup.find_all("table")
@@ -101,11 +116,16 @@ def parse_csres_detail_html(html: str, *, url: str) -> SourceRecord:
 
     code_match = re.search(r"标准编号\s*[:：]?\s*([A-Za-z/]+\s*[A-Za-z]?\s*[0-9IOl]+(?:[-.]\s*[0-9IOl]+)*\s*[-—]\s*[0-9IOl]{4})", page_text)
     code = normalize_standard_code(code_match.group(1)) if code_match else ""
-    status_match = re.search(r"标准状态\s*[:：]?\s*(现行有效|现行|即将实施|废止|作废|被替代|局部修订)", page_text)
+    status_match = re.search(r"标准状态\s*[:：]?\s*(现行有效|现行|即将实施|已废止|废止|已作废|作废|被替代|局部修订)", page_text)
     name = field("中文名称") or field("标准名称") or ""
     title_text = soup.title.get_text(" ", strip=True) if soup.title else ""
     if code and title_text:
-        title_without_code = re.sub(re.escape(code), "", title_text, flags=re.IGNORECASE)
+        title_without_code = re.sub(re.escape(code), "", title_text, count=1, flags=re.IGNORECASE)
+        title_without_code = re.sub(
+            r"\s+(?:国家标准|行业标准|地方标准|团体标准).*?工标网.*$",
+            "",
+            title_without_code,
+        )
         title_without_code = re.sub(r"[-—]\s*工标网.*$", "", title_without_code).strip()
         if title_without_code:
             name = title_without_code
@@ -117,6 +137,8 @@ def parse_csres_detail_html(html: str, *, url: str) -> SourceRecord:
     if not code:
         raise ParseError("CSRES detail page has no standard code", source="csres", url=url)
     edition = parse_edition(name)
+    raw_replacement = field("替代情况") or field("被替代标准")
+    replaces, replaced_by = parse_csres_replacement_text(raw_replacement)
     return SourceRecord(
         source_name="csres",
         code=code,
@@ -129,10 +151,10 @@ def parse_csres_detail_html(html: str, *, url: str) -> SourceRecord:
         publish_date=field("发布日期"),
         implement_date=field("实施日期"),
         abolish_date=field("废止日期"),
-        replaces=field("替代情况"),
-        replaced_by=field("被替代标准"),
+        replaces="; ".join(replaces) or None,
+        replaced_by="; ".join(replaced_by) or None,
         issuing_authority=field("发布部门"),
-        raw_payload={"html_fields": True},
+        raw_payload={"html_fields": True, "raw_replacement_text": raw_replacement},
     )
 
 

@@ -12,13 +12,17 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
-_PREFIX = r"(?:GB(?:\s*/\s*T)?|JGJ(?:\s*/\s*T)?|CJJ(?:\s*/\s*T)?|CJ(?:\s*/\s*T)?|DB(?:\s*/\s*T)?|建标|T\s*/\s*)"
+_PREFIX = (
+    r"(?:GB(?:\s*/?\s*T)?|JGJ(?:\s*/?\s*T)?|CJJ(?:\s*/?\s*T)?|"
+    r"CJ(?:\s*/?\s*T)?|DBJ(?:\s*/?\s*T)?|DB(?:\s*/?\s*T)?|\u5efa\u6807|"
+    r"T\s*/\s*[A-Z]{2,12}|[A-Z]{1,8}(?:\s*/\s*[A-Z]{1,8})?)"
+)
 _CODE_WITH_YEAR_RE = re.compile(
-    rf"(?P<prefix>{_PREFIX})\s*(?P<serial>[A-Z0-9IOl]+(?:\s*[-.]\s*[A-Z0-9IOl]+)*)\s*[-—]\s*(?P<year>[0-9IOl]{{4}})",
+    rf"(?P<prefix>{_PREFIX})\s*(?P<serial>[A-Z0-9IOl()/.]+(?:\s*[-.]\s*[A-Z0-9IOl()/.]+)*)\s*-\s*(?P<year>[0-9IOl]{{2}}(?:[0-9IOl]{{2}})?)",
     re.IGNORECASE,
 )
 _CODE_WITHOUT_YEAR_RE = re.compile(
-    rf"(?P<prefix>{_PREFIX})\s*(?P<serial>[A-Z0-9IOl]+(?:\s*[-.]\s*[A-Z0-9IOl]+)*)",
+    rf"(?P<prefix>{_PREFIX})\s*(?P<serial>[A-Z0-9IOl()/.]+(?:\s*[-.]\s*[A-Z0-9IOl()/.]+)*)",
     re.IGNORECASE,
 )
 _EDITION_RE = re.compile(
@@ -52,20 +56,33 @@ def _numeric_ocr_fix(value: str) -> str:
     return value.translate(str.maketrans({"l": "1", "I": "1", "O": "0", "o": "0"}))
 
 
+def _normalize_code_punctuation(value: str) -> str:
+    return value.translate(
+        str.maketrans({"／": "/", "－": "-", "–": "-", "—": "-", "﹣": "-", "　": " "})
+    )
+
+
 def _format_prefix(value: str) -> str:
     prefix = re.sub(r"\s+", "", value).upper()
-    if prefix == "JG/T":
-        return "JG/T"
+    compact_recommendations = {
+        "GBT": "GB/T",
+        "JGJT": "JGJ/T",
+        "CJJT": "CJJ/T",
+        "CJT": "CJ/T",
+        "DBT": "DB/T",
+        "DBJT": "DBJ/T",
+    }
+    prefix = compact_recommendations.get(prefix, prefix)
     return prefix
 
 
 def _build_match(match: re.Match[str]) -> ParsedStandardCode:
     prefix = _format_prefix(match.group("prefix"))
-    serial = _numeric_ocr_fix(re.sub(r"\s+", "", match.group("serial"))).upper()
+    serial = _numeric_ocr_fix(re.sub(r"\s+", "", match.group("serial"))).upper().lstrip("/")
     year = match.groupdict().get("year")
     if year:
         year = _numeric_ocr_fix(year)
-    normalized = f"{prefix}{serial}" if prefix.endswith("/") else f"{prefix} {serial}"
+    normalized = f"{prefix}{serial}" if prefix == "T/" else f"{prefix} {serial}"
     if year:
         normalized += f"-{year}"
     return ParsedStandardCode(
@@ -82,10 +99,12 @@ def parse_standard_code(value: str | None) -> ParsedStandardCode | None:
 
     if not value:
         return None
-    text = str(value).strip().replace("（", "(").replace("）", ")")
+    text = _normalize_code_punctuation(str(value)).strip().replace("（", "(").replace("）", ")")
     match = _CODE_WITH_YEAR_RE.search(text)
     if match:
         return _build_match(match)
+    if re.fullmatch(r"T/[A-Z]+", text, re.IGNORECASE):
+        return None
     match = _CODE_WITHOUT_YEAR_RE.search(text)
     if match:
         return _build_match(match)
@@ -97,14 +116,15 @@ def extract_standard_codes(text: str | None) -> list[ParsedStandardCode]:
 
     if not text:
         return []
+    text = _normalize_code_punctuation(str(text))
     found: list[ParsedStandardCode] = []
     occupied: list[tuple[int, int]] = []
-    for match in _CODE_WITH_YEAR_RE.finditer(str(text)):
+    for match in _CODE_WITH_YEAR_RE.finditer(text):
         parsed = _build_match(match)
         if parsed.normalized not in {item.normalized for item in found}:
             found.append(parsed)
         occupied.append(match.span())
-    for match in _CODE_WITHOUT_YEAR_RE.finditer(str(text)):
+    for match in _CODE_WITHOUT_YEAR_RE.finditer(text):
         if any(start <= match.start() < end for start, end in occupied):
             continue
         parsed = _build_match(match)
@@ -163,9 +183,14 @@ def clean_standard_name(name: str | None) -> str:
     if not name:
         return ""
     value = str(name)
+    value = value.replace("《", "").replace("》", "")
+    value = re.sub(r"[(（]\s*\d{4}\s*年?版\s*[)）]", "", value)
+    value = re.sub(r"[(（]\s*[含附]条文说明\s*[)）]", "", value)
     value = re.sub(r"[(（].*?附.*?说明.*?[)）]", "", value)
     value = re.sub(r"[\[【].*?[\]】]", "", value)
     value = re.sub(r"[(（]共.*?[册分卷][)）]", "", value)
+    for code in extract_standard_codes(value):
+        value = value.replace(code.raw, "")
     return re.sub(r"\s+", " ", value).strip(" ,，;；")
 
 

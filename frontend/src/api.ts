@@ -55,6 +55,24 @@ export interface SearchResult {
     source_conflict?: boolean;
     last_verified_at?: string | null;
     sources?: SourceInfo[];
+    match_type?: MatchType | null;
+    confidence?: number | null;
+    recommended_citation?: string | null;
+    message?: string | null;
+    data_quality_status?: string | null;
+    document_kind?: string | null;
+}
+
+export type MatchType = 'exact' | 'revision_missing' | 'code_type_mismatch' | 'code_mismatch' | 'name_mismatch' | 'obsolete' | 'replaced' | 'unknown' | 'not_found' | 'source_conflict';
+
+export interface VerifyResponse {
+    input_code: string;
+    canonical_code?: string | null;
+    match_type: MatchType;
+    confidence: number;
+    recommended_citation: string;
+    message: string;
+    result?: SearchResult | null;
 }
 
 export interface SourceInfo {
@@ -120,6 +138,16 @@ export const api = {
     searchStandard: async (keyword: string): Promise<SearchResult[]> => {
         const response = await axios.post(`${API_BASE_URL}/search`, { keyword });
         return response.data.results;
+    },
+
+    verifyStandard: async (code: string, name?: string | null): Promise<VerifyResponse> => {
+        const response = await axios.post(`${API_BASE_URL}/v1/verify`, { code, name: name || null });
+        return response.data;
+    },
+
+    exportStandards: async (standards: StandardInfo[]): Promise<Blob> => {
+        const response = await axios.post(`${API_BASE_URL}/export`, { standards }, { responseType: 'blob' });
+        return response.data;
     },
 
     getStandardDetail: async (url?: string, code?: string): Promise<StandardDetail> => {

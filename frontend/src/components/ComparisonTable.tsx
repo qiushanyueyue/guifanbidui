@@ -39,6 +39,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
     // Feedback Modal State
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const [feedbackStandard, setFeedbackStandard] = useState<{ name: string, code: string } | null>(null);
+    const [filter, setFilter] = useState<'all' | 'issues' | 'obsolete' | 'update' | 'not_found'>('all');
 
     // checkStandard logic REMOVED (moved to App.tsx)
 
@@ -63,6 +64,30 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
 
     if (standards.length === 0) return null;
 
+    const visibleStandards = standards
+        .map((standard, index) => ({ standard, index, result: resultsMap[standard.code || standard.name || 'unknown'] }))
+        .filter(({ result }) => {
+            if (filter === 'all') return true;
+            if (filter === 'not_found') return result === 'not_found';
+            if (!result || typeof result !== 'object') return filter === 'issues';
+            if (filter === 'obsolete') return ['obsolete', 'replaced'].includes(result.match_type || '') || isInactiveStatus(result.status);
+            if (filter === 'update') return ['revision_missing', 'code_type_mismatch', 'code_mismatch', 'name_mismatch'].includes(result.match_type || '');
+            return result.match_type !== 'exact';
+        });
+    const batchCounts = standards.reduce(
+        (counts, standard) => {
+            const result = resultsMap[standard.code || standard.name || 'unknown'];
+            if (result === 'not_found') counts.notFound += 1;
+            else if (result && typeof result === 'object') {
+                if (result.match_type === 'exact') counts.exact += 1;
+                else if (['obsolete', 'replaced'].includes(result.match_type || '') || isInactiveStatus(result.status)) counts.obsolete += 1;
+                else counts.issues += 1;
+            }
+            return counts;
+        },
+        { exact: 0, issues: 0, obsolete: 0, notFound: 0 },
+    );
+
     return (
         <div className="comparison-table" style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -81,6 +106,24 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                 </div>
             </div>
 
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                {([
+                    ['all', '全部'], ['issues', '仅问题'], ['obsolete', '已废止'], ['update', '需更新'], ['not_found', '未找到'],
+                ] as const).map(([value, label]) => (
+                    <button
+                        key={value}
+                        onClick={() => setFilter(value)}
+                        style={{
+                            border: '1px solid #d1d5db', borderRadius: '4px', padding: '5px 10px', cursor: 'pointer',
+                            background: filter === value ? '#2563eb' : '#fff', color: filter === value ? '#fff' : '#374151',
+                        }}
+                    >{label}</button>
+                ))}
+                <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#6b7280', alignSelf: 'center' }}>
+                    本次识别 {standards.length} 条 · 完全一致 {batchCounts.exact} · 需修改 {batchCounts.issues} · 已废止 {batchCounts.obsolete} · 未找到 {batchCounts.notFound}
+                </span>
+            </div>
+
             <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #eee', fontSize: '13px' }}>
                 <thead>
                     <tr style={{ background: '#fafafa', color: '#666', height: '45px', textAlign: 'left' }}>
@@ -88,7 +131,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                         <th style={{ padding: '0 10px' }}>规范名称(识别)</th>
                         <th style={{ padding: '0 10px' }}>规范编号(识别)</th>
                         <th style={{ padding: '0 10px', width: '25%', textAlign: 'center' }}>匹配规范</th>
-                        <th style={{ width: '180px', padding: '12px 10px', textAlign: 'center', fontWeight: '600', color: '#666' }}>匹配信息</th>
+                        <th style={{ width: '180px', padding: '12px 10px', textAlign: 'center', fontWeight: '600', color: '#666' }}>业务判定</th>
                         <th style={{ width: '10%', textAlign: 'center' }}>状态</th>
                         <th style={{ width: '10%', textAlign: 'center' }}>匹配结果</th>
                         <th style={{ width: '10%', textAlign: 'center' }}>搜建筑</th>
@@ -96,7 +139,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {standards.map((std, index) => (
+                    {visibleStandards.map(({ standard: std, index }) => (
                         <StandardRowControlled
                             key={index}
                             index={index + 1}
@@ -148,111 +191,21 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
     const isLoading = resultStatus === 'loading';
     const isError = resultStatus === 'error';
 
-    // Calculation Logic
-    const calculateMatchScore = (sourceName: string, sourceCode: string, result: SearchResult | null) => {
-        if (!result) return { score: "-", isConsistent: "-" };
-
-        let score = 0;
-        // Normalize codes: uppercase and remove ALL spaces
-        const normSourceCode = sourceCode.replace(/\s+/g, '').toUpperCase();
-        const normResultCode = result.code.replace(/\s+/g, '').toUpperCase();
-
-        const normSourceName = sourceName.trim();
-        const normResultName = result.name.trim();
-
-        // 1. Code Match
-        let isCodePerfect = false;
-        if (normSourceCode === normResultCode) {
-            score += 50;
-            isCodePerfect = true;
-        } else if (normResultCode.includes(normSourceCode) || normSourceCode.includes(normResultCode)) {
-            score += 30; // Partial code match
-        }
-
-        // 2. Name Match
-        let isNamePerfect = false;
-        if (normSourceName === normResultName) {
-            score += 50;
-            isNamePerfect = true;
-        } else {
-            // Simple overlap check
-            let matchCount = 0;
-            for (const char of normSourceName) {
-                if (normResultName.includes(char)) matchCount++;
-            }
-            const similarity = matchCount / Math.max(normSourceName.length, normResultName.length);
-            if (similarity > 0.8) score += 30;
-            else if (similarity > 0.5) score += 10;
-        }
-
-        // 3. Year/Version Match (Source vs Result)
-        const versionRegex = /[（(](.*?)[)）]/g;
-        const sourceVersions = [...sourceName.matchAll(versionRegex)].map(m => m[1]);
-
-        let versionMismatch = false;
-        if (sourceVersions.length > 0) {
-            for (const ver of sourceVersions) {
-                if (!result.name.includes(ver)) {
-                    versionMismatch = true;
-                    break;
-                }
-            }
-        }
-
-        // 4. Reverse Year/Version Check (Result vs Source)
-        // Check if result has a version year that source is missing (e.g. 2018年版)
-        const resultVersions = [...result.name.matchAll(versionRegex)].map(m => m[1]);
-        if (resultVersions.length > 0) {
-            for (const ver of resultVersions) {
-                // Check if this version string looks like a year/edition (contains digit)
-                if (/\d/.test(ver) && !sourceName.includes(ver)) {
-                    // If source doesn't have it, treating it as version mismatch if code is perfect
-                    if (isCodePerfect) {
-                        versionMismatch = true;
-                    }
-                }
-            }
-        }
-
-        if (versionMismatch) return { score: `${Math.min(score, 80)}%`, isConsistent: "年份/版本不一致" };
-
-        // Perfect Match
-        if (isCodePerfect && isNamePerfect) {
-            return { score: "100%", isConsistent: "与匹配规范一致" };
-        }
-
-        // Code Perfect, Name Differs
-        if (isCodePerfect) {
-            if (score >= 80) return { score: `${Math.min(score, 95)}%`, isConsistent: "名称/版本不一致" };
-            return { score: `${score}%`, isConsistent: "名称不一致" };
-        }
-
-        // Final Cap logic for NON-perfect code matches
-        if (versionMismatch) return { score: `${Math.min(score, 90)}%`, isConsistent: "年份/版本不一致" };
-
-        // If code differed (even partially), we flag it
-        if (normSourceCode !== normResultCode) return { score: `${score}%`, isConsistent: "编号不一致" };
-        if (normSourceName !== normResultName) return { score: `${score}%`, isConsistent: "名称不一致" };
-
-        return { score: `${score}%`, isConsistent: "部分匹配" };
+    const matchLabels: Record<string, string> = {
+        exact: '完全一致',
+        revision_missing: '修订版需更新',
+        code_type_mismatch: '标准属性错误',
+        code_mismatch: '规范编号错误',
+        name_mismatch: '规范名称错误',
+        obsolete: '已废止',
+        replaced: '被替代',
+        unknown: '待核验',
+        source_conflict: '来源冲突',
     };
-
-    const { score: matchScore, isConsistent } = calculateMatchScore(standard.name || '', standard.code, result);
-    // DEBUG:
-    if (matchScore !== '100%' && result) {
-        console.log(`[Diff] ${standard.code} vs ${result.code}`, {
-            sourceName: standard.name,
-            resultName: result.name,
-            matchScore,
-            isConsistent
-        });
-    }
-
-    // Determine color based on matchScore
-    const getScoreColor = (scoreStr: string) => {
-        if (scoreStr === "100%") return '#10b981'; // Green
-        return '#f59e0b'; // Orange/Yellow for anything non-100%
-    };
+    const matchType = result?.match_type || (result?.status === 'unknown' ? 'unknown' : 'exact');
+    const matchLabel = result ? (matchLabels[matchType] || '待核验') : '-';
+    const isIssue = matchType !== 'exact';
+    const isConsistent = result?.message || matchLabel;
 
     // Replacement Info Logic
     const [replacementInfo, setReplacementInfo] = React.useState<string | null>(null);
@@ -349,17 +302,17 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                 )}
             </td>
 
-            {/* 匹配度 */}
+            {/* 业务判定 */}
             <td style={{ padding: '0 10px', textAlign: 'center' }}>
                 <span style={{
-                    color: getScoreColor(matchScore),
+                    color: isIssue ? '#b45309' : '#047857',
                     fontWeight: 'bold',
-                    backgroundColor: matchScore === '100%' ? '#ecfdf5' : '#fffbeb',
+                    backgroundColor: isIssue ? '#fffbeb' : '#ecfdf5',
                     padding: '4px 8px',
                     borderRadius: '12px',
                     fontSize: '12px'
                 }}>
-                    {matchScore}
+                    {matchLabel}
                 </span>
             </td>
 

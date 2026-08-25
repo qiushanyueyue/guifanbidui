@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.sources.csres import parse_csres_detail_html, parse_csres_search_html
+from app.sources.csres import parse_csres_detail_html, parse_csres_replacement_text, parse_csres_search_html
 from app.sources.soujianzhu import parse_soujianzhu_recent_html
 from app.sources.base import ParseError
 
@@ -34,3 +34,11 @@ def test_soujianzhu_fixture_parser():
 def test_csres_structure_change_is_visible():
     with pytest.raises(ParseError):
         parse_csres_search_html("<html><body><p>changed</p></body></html>")
+
+
+def test_csres_compound_replacement_text_is_split_by_direction():
+    replaces, replaced_by = parse_csres_replacement_text(
+        "GB 50157-1992 ;被 GB 50157-2013 代替并废止"
+    )
+    assert replaces == ["GB 50157-1992"]
+    assert replaced_by == ["GB 50157-2013"]

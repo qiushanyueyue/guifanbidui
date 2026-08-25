@@ -51,7 +51,11 @@ def resolve_status(sources: list[StandardSourceModel], existing_status: str | No
     all_status_values = {normalize_status(source.source_status) for source in usable}
     selected = selected_pool[0]
     conflict = len(status_values) > 1 or (official and len(all_status_values) > 1)
-    same_level_conflict = len(status_values) > 1 and len({SOURCE_PRIORITY.get(item.source_name, 99) for item in selected_pool}) == 1
+    third_party_only = not official and not p1
+    same_level_conflict = len(status_values) > 1 and (
+        third_party_only
+        or len({SOURCE_PRIORITY.get(item.source_name, 99) for item in selected_pool}) == 1
+    )
     if conflict:
         verification = VerificationLevel.CONFLICT
     elif official:

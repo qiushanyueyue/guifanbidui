@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './StandardDetailModal.css'; // Reuse modal styles or create new one
 
-import { isInactiveStatus, type StandardInfo, type SearchResult } from '../api';
+import { api, isInactiveStatus, type StandardInfo, type SearchResult } from '../api';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -60,6 +60,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                 validIndex++;
             }
 
+            if (result.recommended_citation && wrapName && wrapCode) {
+                validLines.push(line + result.recommended_citation);
+                return;
+            }
+
             if (wrapName) {
                 line += `《${finalName}》`;
             } else {
@@ -82,6 +87,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
     const handleCopy = () => {
         navigator.clipboard.writeText(previewText);
         alert('已复制到剪贴板');
+    };
+
+    const handleExcelExport = async () => {
+        const blob = await api.exportStandards(standards);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = '规范查新结果.xlsx';
+        anchor.click();
+        URL.revokeObjectURL(url);
     };
 
     if (!isOpen) return null;
@@ -198,6 +213,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '15px', borderTop: '1px solid #eee' }}>
                     <button className="btn-secondary" onClick={onClose}>关闭</button>
+                    <button className="btn-secondary" onClick={handleExcelExport}>导出 Excel</button>
                     <button className="btn-primary" onClick={handleCopy}>复制文本</button>
                 </div>
             </div>

@@ -29,6 +29,10 @@ class ExtractionResponse(BaseModel):
     standards: List[StandardInfo]
 
 
+class ExportRequest(BaseModel):
+    standards: List[StandardInfo] = Field(max_length=5000)
+
+
 class SearchRequest(BaseModel):
     keyword: str = Field(min_length=1, max_length=200)
 
@@ -75,6 +79,12 @@ class SearchResult(BaseModel):
     source_conflict: bool = False
     last_verified_at: Optional[datetime] = None
     sources: List[SourceInfo] = Field(default_factory=list)
+    match_type: Optional[str] = None
+    confidence: Optional[float] = None
+    recommended_citation: Optional[str] = None
+    message: Optional[str] = None
+    data_quality_status: Optional[str] = None
+    document_kind: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -116,7 +126,7 @@ class StatsResponse(BaseModel):
 
 
 class VerifyRequest(BaseModel):
-    code: str = Field(min_length=1, max_length=120)
+    code: str = Field(default="", max_length=120)
     name: Optional[str] = Field(default=None, max_length=500)
 
 
@@ -132,6 +142,11 @@ class VerifyResponse(BaseModel):
     verification_level: VerificationLevel = VerificationLevel.UNVERIFIED
     sources: List[SourceInfo] = Field(default_factory=list)
     last_verified_at: Optional[datetime] = None
+    match_type: str = "unknown"
+    confidence: float = 0.0
+    recommended_citation: str = ""
+    message: str = ""
+    result: Optional[SearchResult] = None
 
 
 class SyncStatusResponse(BaseModel):

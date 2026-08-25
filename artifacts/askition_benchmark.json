@@ -1,0 +1,36 @@
+{
+  "tested_at": "2026-08-25T10:20:00+08:00",
+  "method": "logged-in visible UI black-box test; no database scraping",
+  "cases": [
+    {
+      "input": "《建筑设计防火规范》GB 50016-2014",
+      "our_result": "revision_missing; current; recommend 2018年版",
+      "askition_result": "100%; 现行; matched 2018年版; 与匹配规范一致",
+      "agreement": "same canonical record and status; our result explicitly flags missing revision"
+    },
+    {
+      "input": "《办公建筑设计标准》JGJ 67-2019",
+      "our_result": "code_type_mismatch; recommend JGJ/T 67-2019",
+      "askition_result": "10%; 现行; matched JGJ/T 67-2019; 与匹配规范一致",
+      "agreement": "same canonical record; our business message is more actionable"
+    },
+    {
+      "input": "《地铁设计规范》GB 50157-2003",
+      "our_result": "obsolete; abolished; replaced_by GB 50157-2013",
+      "askition_result": "100%; 已作废/废止; latest GB 50157-2013",
+      "agreement": "full"
+    },
+    {
+      "input": "《混凝土结构设计标准》GB/T 50010-2010",
+      "our_result": "revision_missing; current; recommend 2024年版",
+      "askition_result": "100%; 现行; matched 2024年版; 与匹配规范一致",
+      "agreement": "same canonical record and status; our result explicitly flags missing revision"
+    },
+    {
+      "input": "《民用建筑设计统一标准》GB 50352-2019",
+      "our_result": "exact; current",
+      "askition_result": "100%; 现行; 与匹配规范一致",
+      "agreement": "full"
+    }
+  ]
+}

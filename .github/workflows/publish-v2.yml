@@ -1,0 +1,29 @@
+name: publish reviewed standards v2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STANDARDS_DATASET: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require persistent production database
+        run: test -n "$DATABASE_URL"
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Migrate additive V2 schema
+        run: python scripts/migrate_v2.py
+      - name: Import reviewed V2 metadata seed
+        run: python scripts/import_v2_seed.py
+      - name: Verify V2 quality and golden cases
+        run: |
+          python scripts/rebuild_v2.py
+          python scripts/run_golden_cases.py
