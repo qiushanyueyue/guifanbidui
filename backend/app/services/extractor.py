@@ -106,6 +106,31 @@ def extract_year(code: str) -> Optional[str]:
     return parsed.year if parsed else None
 
 
+def _parse_remote_json_array(content: object) -> list[object]:
+    """Recover a JSON array from a model response without trusting prose."""
+
+    if not isinstance(content, str):
+        return content if isinstance(content, list) else []
+
+    text = content.strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+
+    decoder = json.JSONDecoder()
+    candidates = [text]
+    if text.startswith("[") is False:
+        candidates.extend(text[index:] for index, char in enumerate(text) if char == "[")
+    for candidate in candidates:
+        try:
+            value, _ = decoder.raw_decode(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, list):
+            return value
+    return []
+
+
 def extract_standards_deepseek(text: str) -> List[StandardInfo]:
     """Optional, explicitly enabled remote extraction.
 
@@ -123,7 +148,7 @@ def extract_standards_deepseek(text: str) -> List[StandardInfo]:
     import requests
 
     payload = {
-        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         "messages": [
             {
                 "role": "system",
@@ -142,7 +167,7 @@ def extract_standards_deepseek(text: str) -> List[StandardInfo]:
         )
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
-        items = json.loads(content.replace("```json", "").replace("```", "").strip())
+        items = _parse_remote_json_array(content)
         return [
             StandardInfo(
                 code=clean_code(item.get("code", "")),
