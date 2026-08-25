@@ -78,6 +78,105 @@ def test_remote_extraction_parses_array_embedded_in_explanation(monkeypatch) -> 
     assert result[0].code == "GB/T 50010-2010"
 
 
+def test_remote_extraction_discards_malformed_code_without_name(monkeypatch) -> None:
+    _enable_remote(monkeypatch)
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(
+            {"choices": [{"message": {"content": '[{"code":"G B","name":null}]'}}]}
+        ),
+    )
+
+    assert extract_standards_deepseek("请提取规范") == []
+
+
+def test_remote_extraction_normalizes_valid_code(monkeypatch) -> None:
+    _enable_remote(monkeypatch)
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(
+            {
+                "choices": [
+                    {"message": {"content": '[{"code":"GB50016-2014","name":null} ]'}}
+                ]
+            }
+        ),
+    )
+
+    result = extract_standards_deepseek("请提取规范")
+
+    assert len(result) == 1
+    assert result[0].code == "GB 50016-2014"
+    assert result[0].normalized_code == "GB 50016-2014"
+
+
+def test_remote_extraction_preserves_ocr_code_normalization(monkeypatch) -> None:
+    _enable_remote(monkeypatch)
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(
+            {
+                "choices": [
+                    {"message": {"content": '[{"code":"JGJ l8-2012","name":null} ]'}}
+                ]
+            }
+        ),
+    )
+
+    result = extract_standards_deepseek("请提取规范")
+
+    assert len(result) == 1
+    assert result[0].code == "JGJ 18-2012"
+
+
+def test_remote_extraction_keeps_name_only_reference(monkeypatch) -> None:
+    _enable_remote(monkeypatch)
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '[{"code":"G B","name":"钢筋焊接及验收规程"}]'
+                        }
+                    }
+                ]
+            }
+        ),
+    )
+
+    result = extract_standards_deepseek("请提取规范")
+
+    assert len(result) == 1
+    assert result[0].code == ""
+    assert result[0].normalized_code == ""
+    assert result[0].name == "钢筋焊接及验收规程"
+
+
+def test_remote_prompt_requires_strict_json_and_no_fabrication(monkeypatch) -> None:
+    _enable_remote(monkeypatch)
+    captured: dict = {}
+
+    def fake_post(url, **kwargs):
+        captured.update(kwargs)
+        return _FakeResponse({"choices": [{"message": {"content": "[]"}}]})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    assert extract_standards_deepseek("请提取规范") == []
+
+    prompt = captured["json"]["messages"][0]["content"]
+    assert "只输出 JSON 数组" in prompt
+    assert '"code"' in prompt and '"name"' in prompt
+    assert "无法判断" in prompt
+    assert "不要臆造" in prompt
+
+
 def test_remote_extraction_honors_model_override(monkeypatch) -> None:
     _enable_remote(monkeypatch)
     monkeypatch.setenv("DEEPSEEK_MODEL", "custom-model")

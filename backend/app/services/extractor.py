@@ -13,6 +13,7 @@ from app.services.standard_normalizer import (
     clean_standard_name,
     extract_standard_codes,
     normalize_standard_code,
+    parse_standard_code,
     parse_edition,
 )
 
@@ -131,6 +132,36 @@ def _parse_remote_json_array(content: object) -> list[object]:
     return []
 
 
+_REMOTE_EMPTY_NAMES = frozenset(
+    {"", "na", "n/a", "none", "null", "未知", "无法判断", "不确定", "未识别", "未找到", "暂无"}
+)
+
+
+def _normalize_remote_code(value: object) -> tuple[str, str | None]:
+    """Keep only codes that have a structurally usable standard number."""
+
+    if not isinstance(value, str):
+        return "", None
+    raw = value.strip()
+    if not raw or re.search(r"[A-Z]\s+[A-Z]", raw):
+        return "", None
+    parsed = parse_standard_code(raw)
+    if not parsed or not re.search(r"\d", parsed.serial):
+        return "", None
+    if parsed.prefix.isalpha() and len(parsed.prefix) < 2:
+        return "", None
+    return parsed.normalized, parsed.year
+
+
+def _clean_remote_name(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    cleaned = clean_name(value)
+    if cleaned.casefold() in _REMOTE_EMPTY_NAMES:
+        return ""
+    return cleaned
+
+
 def extract_standards_deepseek(text: str) -> List[StandardInfo]:
     """Optional, explicitly enabled remote extraction.
 
@@ -152,7 +183,13 @@ def extract_standards_deepseek(text: str) -> List[StandardInfo]:
         "messages": [
             {
                 "role": "system",
-                "content": "Extract Chinese engineering standard code and name pairs as JSON.",
+                "content": (
+                    "你是建筑工程规范引用识别器。仅根据输入文本提取明确出现的规范编号或规范名称，"
+                    "不确定时不要臆造。只输出 JSON 数组，数组元素只能包含 \"code\" 和 \"name\" 两个字段，"
+                    "格式如 [{\"code\":\"GB 50016-2014\",\"name\":\"建筑设计防火规范\"}]。"
+                    "无法判断编号或名称时使用空字符串；无法确认任何规范时输出 []。"
+                    "禁止输出 Markdown、解释文字或其它内容。"
+                ),
             },
             {"role": "user", "content": text},
         ],
@@ -168,17 +205,25 @@ def extract_standards_deepseek(text: str) -> List[StandardInfo]:
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         items = _parse_remote_json_array(content)
-        return [
-            StandardInfo(
-                code=clean_code(item.get("code", "")),
-                normalized_code=clean_code(item.get("code", "")),
-                base_code=clean_code(item.get("code", "")),
-                name=clean_name(item.get("name", "")) or None,
-                year=item.get("year") or extract_year(item.get("code", "")),
+        standards: list[StandardInfo] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            code, parsed_year = _normalize_remote_code(item.get("code"))
+            name = _clean_remote_name(item.get("name"))
+            if not code and not name:
+                continue
+            year = (item.get("year") or parsed_year) if code else None
+            standards.append(
+                StandardInfo(
+                    code=code,
+                    normalized_code=code,
+                    base_code=code,
+                    name=name or None,
+                    year=year,
+                )
             )
-            for item in items
-            if isinstance(item, dict)
-        ]
+        return standards
     except Exception as exc:  # Remote extraction is optional and non-fatal.
         logger.warning("Remote extraction failed: %s", exc.__class__.__name__)
         return []

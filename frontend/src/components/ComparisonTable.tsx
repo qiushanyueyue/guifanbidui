@@ -19,6 +19,23 @@ const formatDataUpdatedAt = (value: string | null): string => {
     }).format(parsed).replaceAll('/', '.');
 };
 
+const sourceActionStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    width: '96px',
+    minHeight: '44px',
+    padding: '4px 12px',
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '12px',
+    textDecoration: 'none',
+    lineHeight: '1.5',
+    border: 'none',
+    cursor: 'pointer',
+};
+
 interface ComparisonTableProps {
     standards: StandardInfo[];
     resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>; // New Prop
@@ -57,6 +74,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const [feedbackStandard, setFeedbackStandard] = useState<{ name: string, code: string } | null>(null);
     const [filter, setFilter] = useState<'all' | 'issues' | 'obsolete' | 'update' | 'not_found'>('all');
+    const [emptyDraft, setEmptyDraft] = useState({ name: '', code: '' });
 
     // checkStandard logic REMOVED (moved to App.tsx)
 
@@ -79,7 +97,25 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
         setIsFeedbackOpen(true);
     };
 
-    if (standards.length === 0) return null;
+    const commitEmptyDraft = () => {
+        const name = emptyDraft.name.trim();
+        const code = emptyDraft.code.trim();
+        if (!name && !code) return;
+        if (onUpdate) {
+            onUpdate(0, 'name', name);
+            onUpdate(0, 'code', code);
+        } else {
+            onAdd?.();
+        }
+        setEmptyDraft({ name: '', code: '' });
+    };
+
+    const handleEmptyDraftKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitEmptyDraft();
+        }
+    };
 
     const visibleStandards = standards
         .map((standard, index) => ({ standard, index, result: resultsMap[getResultKey(standard)] }))
@@ -125,20 +161,21 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
             </div>
 
             <div className="results-toolbar">
-                {([
+                {standards.length > 0 ? ([
                     ['all', '全部'], ['issues', '仅问题'], ['obsolete', '已废止'], ['update', '需更新'], ['not_found', '未找到'],
                 ] as const).map(([value, label]) => (
                     <button
+                        className={`filter-button${filter === value ? ' is-active' : ''}`}
                         key={value}
                         onClick={() => setFilter(value)}
-                        style={{
-                            border: '1px solid #d1d5db', borderRadius: '4px', padding: '5px 10px', cursor: 'pointer',
-                            background: filter === value ? '#2563eb' : '#fff', color: filter === value ? '#fff' : '#374151',
-                        }}
                     >{label}</button>
-                ))}
+                )) : (
+                    <span className="empty-toolbar-hint">还没有待查规范，先在下方填写名称和编号</span>
+                )}
                 <span className="results-summary">
-                    本次识别 {standards.length} 条 · 完全一致 {batchCounts.exact} · 需修改 {batchCounts.issues} · 已废止 {batchCounts.obsolete} · 未找到 {batchCounts.notFound}
+                    {standards.length > 0
+                        ? `本次识别 ${standards.length} 条 · 完全一致 ${batchCounts.exact} · 需修改 ${batchCounts.issues} · 已废止 ${batchCounts.obsolete} · 未找到 ${batchCounts.notFound}`
+                        : '尚未开始查新'}
                 </span>
             </div>
 
@@ -158,21 +195,74 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {visibleStandards.map(({ standard: std, index }) => (
-                        <StandardRowControlled
-                            key={getResultKey(std)}
-                            index={index + 1}
-                            standard={std}
-                            resultStatus={resultsMap[getResultKey(std)]}
-                            onCheck={() => onCheckSingle(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std))}
-                            onViewDetail={(result) => handleViewDetail(result, std)}
-                            onRemove={() => onRemove && onRemove(index)}
-                            onUpdate={(field, value) => onUpdate && onUpdate(index, field, value)}
-                            onFeedback={() => handleFeedback(std)}
-                        />
-                    ))}
+                    {standards.length === 0 ? (
+                        <tr className="empty-state-row">
+                            <td className="empty-state-index">—</td>
+                            <td>
+                                <input
+                                    className="empty-state-input"
+                                    aria-label="新增规范名称"
+                                    value={emptyDraft.name}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEmptyDraft((previous) => ({ ...previous, name: value }));
+                                    }}
+                                    onKeyDown={handleEmptyDraftKeyDown}
+                                    placeholder="输入规范名称"
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    className="empty-state-input"
+                                    aria-label="新增规范编号"
+                                    value={emptyDraft.code}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEmptyDraft((previous) => ({ ...previous, code: value }));
+                                    }}
+                                    onKeyDown={handleEmptyDraftKeyDown}
+                                    placeholder="输入规范编号，如 GB 50016-2014"
+                                />
+                            </td>
+                            <td colSpan={6}>
+                                <div className="empty-state-content">
+                                    <strong>暂无待查规范</strong>
+                                    <span>填写名称或编号后即可进入查新列表；也可以先粘贴文本，再点击“提取并查新”。</span>
+                                    <button
+                                        className="btn-secondary empty-state-add"
+                                        type="button"
+                                        onClick={commitEmptyDraft}
+                                        disabled={!emptyDraft.name.trim() && !emptyDraft.code.trim()}
+                                    >加入查新列表</button>
+                                </div>
+                            </td>
+                        </tr>
+                    ) : visibleStandards.map(({ standard: std, index }) => (
+                            <StandardRowControlled
+                                key={getResultKey(std)}
+                                index={index + 1}
+                                standard={std}
+                                resultStatus={resultsMap[getResultKey(std)]}
+                                onCheck={() => onCheckSingle(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std))}
+                                onViewDetail={(result) => handleViewDetail(result, std)}
+                                onRemove={() => onRemove && onRemove(index)}
+                                onUpdate={(field, value) => onUpdate && onUpdate(index, field, value)}
+                                onFeedback={() => handleFeedback(std)}
+                            />
+                        ))}
                 </tbody>
             </table>
+            </div>
+
+            <div className="results-note" aria-label="查新说明">
+                <strong>说明</strong>
+                <div className="results-note-grid">
+                    <span><b className="legend-chip legend-current">现行</b> 可作为当前版本继续核对。</span>
+                    <span><b className="legend-chip legend-update">需更新</b> 输入版本或编号与来源不一致。</span>
+                    <span><b className="legend-chip legend-obsolete">已废止</b> 优先查看替代规范。</span>
+                    <span><b className="legend-chip legend-unknown">未收录</b> 可用右侧来源按钮继续检索。</span>
+                </div>
+                <p>结果仅供查新辅助使用，正式引用请以发布机构和原始文件为准。</p>
             </div>
 
             {/* Modal Restored */}
@@ -406,16 +496,8 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         rel="noopener noreferrer"
                         className="btn-link"
                         style={{
-                            display: 'inline-block',
-                            padding: '4px 12px',
+                            ...sourceActionStyle,
                             backgroundColor: result?.soujianzhu_url ? '#0ea5e9' : '#64748b', // Blue for direct link, Slate (Greyish) for search
-                            color: 'white',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            textDecoration: 'none',
-                            lineHeight: '1.5',
-                            border: 'none',
-                            cursor: 'pointer'
                         }}
                     >
                         {result?.soujianzhu_url ? "搜建筑链接" : "搜建筑搜索"}
@@ -431,16 +513,8 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                             onClick={() => onViewDetail({ ...result, url: csresUrl })}
                             className="btn-link"
                             style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
+                                ...sourceActionStyle,
                                 backgroundColor: '#4f46e5',
-                                color: 'white',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                textDecoration: 'none',
-                                lineHeight: '1.5',
-                                border: 'none',
-                                cursor: 'pointer'
                             }}
                         >
                             工标网查看
@@ -456,16 +530,8 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                             }}
                             className="btn-link"
                             style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
+                                ...sourceActionStyle,
                                 backgroundColor: '#3b82f6', // Changed to button style
-                                color: 'white',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                textDecoration: 'none',
-                                lineHeight: '1.5',
-                                border: 'none',
-                                cursor: 'pointer'
                             }}
                         >
                             工标网搜索

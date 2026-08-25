@@ -101,7 +101,7 @@ function App() {
   };
 
   const handleAddStandard = () => {
-    setStandards([...standards, { code: '', name: '', year: '' }]);
+    setStandards((previous) => [...previous, { code: '', name: '', year: '' }]);
   };
 
   const handleRemoveStandard = (index: number) => {
@@ -111,9 +111,14 @@ function App() {
   };
 
   const handleUpdateStandard = (index: number, field: keyof StandardInfo, value: string) => {
-    const newStandards = [...standards];
-    newStandards[index] = { ...newStandards[index], [field]: value };
-    setStandards(newStandards);
+    setStandards((previous) => {
+      const newStandards = [...previous];
+      while (newStandards.length <= index) {
+        newStandards.push({ code: '', name: '', year: '' });
+      }
+      newStandards[index] = { ...newStandards[index], [field]: value };
+      return newStandards;
+    });
   };
 
   const handleCheckAll = async () => {
@@ -155,23 +160,13 @@ function App() {
 
         {/* Footer & Export Row */}
         {standards.length > 0 && (
-          <div style={{ marginTop: '20px', padding: '10px 0', borderTop: '1px solid #eee' }}>
-            <div style={{ marginBottom: '15px' }}>
+          <div className="export-actions-bar">
               <button
-                className="btn-primary"
-                style={{ backgroundColor: '#4f46e5', width: 'auto', padding: '10px 20px', borderRadius: '6px' }}
+                className="btn-primary export-open-button"
                 onClick={() => setIsExportOpen(true)}
               >
                 导出规范引用
               </button>
-            </div>
-            <div style={{ color: '#888', fontSize: '12px', textAlign: 'left', lineHeight: '1.6' }}>
-              <div>说明：</div>
-              <div>1. 匹配状态：现行（绿色）、待核验（灰色）、废止/替代（红色）。</div>
-              <div>2. 输入结果与最新规范不一致时标记黄色背景。</div>
-              <div>3. 结果仅供参考，必要时请以官方发布为准。</div>
-
-            </div>
           </div>
         )}
       </main>
