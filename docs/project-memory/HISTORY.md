@@ -31,6 +31,7 @@
   - 新对话以 `AGENTS.md` 为强制入口，按需读取纲领、根记忆、当前快照、ADR和历史。
   - 耐久变更必须同步 `CURRENT.md`、追加 `HISTORY.md`、刷新 `MEMORY.md`；长期取舍使用 ADR。
   - 校验器检查必需文件、标题、本地链接、时间证据标记和常见秘密模式。
+  - 已纳入本地提交 `854c74d`，保留用户原有脏工作树；未经授权不推送或触发生产部署。
 - evidence: `python scripts/check_project_memory.py`、记忆合同测试 3 项、后端全量 103 项、前端 11 项、ESLint、Vite build、`git diff --check`。
 - supersedes: 仅依赖会话上下文、过时交接文档或平台隐式记忆的方式。
 - remaining_risk: 记忆不是实时数据源；新对话仍必须根据 `as_of` 和证据重新核验会漂移的事实。

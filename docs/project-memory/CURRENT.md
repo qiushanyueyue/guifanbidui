@@ -13,6 +13,7 @@
 - evidence: GitHub CLI/API、Vercel 部署状态、公网 `/api/health`。
 
 - GitHub 可见性：Public；证据：`gh repo view qiushanyueyue/guifanbidui --json visibility,isPrivate,url` 与匿名 GitHub API。
+- 本地 `feat/standards-v2-rebuild` 已包含仓库级记忆系统（起始提交 `854c74d`，当前 HEAD 需实时复核）。
 - 远端分支：`origin/main`、`origin/feat/standards-v2-rebuild` 均指向 `4556b15`；证据：`git ls-remote origin ...`。
 - 生产域名：`https://guifan.108923.xyz`。
 - Vercel 主线自动部署：Ready；当日部署 `guifanbidui-dywa7lp98-yys-projects-2b5b21c2.vercel.app`。
@@ -68,6 +69,7 @@
 - 官方来源适配器不是全部生产连通；实际未验证的来源必须继续标记未验证。
 - 远程提取开启后，本地零结果会把触发兜底的整段原始输入发送给 DeepSeek；前端尚未给出明确的用户告知，生产开启前需补足。
 - GitHub 工作流文件存在，但 `2026-08-25` 的 `gh run list` 为空；不能据此宣称定时任务已成功运行。
+- 记忆系统已本地提交、未推送；同一工作区的新对话可恢复，公网 GitHub 干净克隆暂不可恢复。
 - 第三方页面结构会变化，适配器需要 fixture 与实际抽样共同验证。
 
 ## 下一次任务首先复核

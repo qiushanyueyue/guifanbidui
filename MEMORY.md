@@ -10,6 +10,7 @@
 ## 当前关键事实
 
 - 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-08-25`。
+- 本地功能分支已提交记忆系统（起始提交 `854c74d`，当前 HEAD 需实时复核）；尚未推送，公网 GitHub 克隆仍看不到该变更。
 - 当前远端主线：`origin/main` 与 `origin/feat/standards-v2-rebuild` 均为 `4556b15`（需在新任务中实时复核）。
 - 已验证数据：1738 条；213 `current`、18 `abolished`、1507 `unknown`、0 `conflict`。
 - 最近验证基线：后端 103 项（含 3 项记忆合同测试）、前端 11 项、黄金案例 50 项通过；桌面和 390×844 手机流程已实测。
