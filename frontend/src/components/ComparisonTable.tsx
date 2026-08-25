@@ -25,6 +25,9 @@ const sourceActionStyle: React.CSSProperties = {
     justifyContent: 'center',
     boxSizing: 'border-box',
     width: '96px',
+    minWidth: '96px',
+    maxWidth: '96px',
+    flexShrink: 0,
     minHeight: '44px',
     padding: '4px 12px',
     color: 'white',
@@ -184,14 +187,14 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                 <thead>
                     <tr style={{ background: '#fafafa', color: '#666', height: '45px', textAlign: 'left' }}>
                         <th style={{ padding: '0 10px', width: '50px' }}>序号</th>
-                        <th style={{ padding: '0 10px' }}>规范名称(识别)</th>
-                        <th style={{ padding: '0 10px' }}>规范编号(识别)</th>
-                        <th style={{ padding: '0 10px', width: '25%', textAlign: 'center' }}>匹配规范</th>
-                        <th style={{ width: '180px', padding: '12px 10px', textAlign: 'center', fontWeight: '600', color: '#666' }}>业务判定</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>状态</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>匹配结果</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>搜建筑</th>
-                        <th style={{ width: '15%', textAlign: 'center' }}>操作</th>
+                        <th style={{ padding: '0 10px', minWidth: '190px' }}>规范名称(识别)</th>
+                        <th style={{ padding: '0 10px', minWidth: '170px' }}>规范编号(识别)</th>
+                        <th style={{ padding: '0 10px', minWidth: '300px', textAlign: 'center' }}>匹配规范</th>
+                        <th style={{ minWidth: '150px', padding: '12px 10px', textAlign: 'center', fontWeight: '600', color: '#666' }}>业务判定</th>
+                        <th style={{ minWidth: '90px', textAlign: 'center' }}>状态</th>
+                        <th style={{ minWidth: '180px', textAlign: 'center' }}>匹配结果</th>
+                        <th style={{ minWidth: '120px', textAlign: 'center' }}>搜建筑</th>
+                        <th style={{ minWidth: '220px', textAlign: 'center' }}>操作</th>
                     </tr>
                 </thead>
                 <tbody>

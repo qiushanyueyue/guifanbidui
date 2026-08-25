@@ -53,6 +53,8 @@ test('source search links remain available when the local lookup is missing', ()
 test('soujianzhu and csres actions share one fixed button size', () => {
   assert.match(comparisonTable, /const sourceActionStyle/);
   assert.match(comparisonTable, /width:\s*'96px'/);
+  assert.match(comparisonTable, /minWidth:\s*'96px'/);
+  assert.match(comparisonTable, /flexShrink:\s*0/);
   assert.match(comparisonTable, /minHeight:\s*'44px'/);
   assert.equal((comparisonTable.match(/\.\.\.sourceActionStyle/g) || []).length, 3);
 });
@@ -76,6 +78,7 @@ test('empty results keep an actionable row and do not auto-check', () => {
 test('table and export modal keep overflow inside their own containers', () => {
   assert.match(appCss, /\.table-scroll\s*\{[\s\S]*?overflow-x:\s*auto/);
   assert.match(appCss, /\.table-scroll\s*\{[\s\S]*?max-width:\s*100%/);
+  assert.match(appCss, /table\s*\{[\s\S]*?min-width:\s*1480px/);
   assert.match(exportModal, /className="modal-overlay export-modal-overlay"/);
   assert.match(exportModal, /className="modal-content export-modal-content"/);
   assert.match(exportModal, /className="modal-body export-modal-body"/);

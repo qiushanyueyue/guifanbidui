@@ -20,6 +20,57 @@ from app.services.standard_normalizer import (
 logger = logging.getLogger(__name__)
 
 
+_LOGICAL_ITEM_BOUNDARY_RE = re.compile(
+    r"\r?\n|(?=[（(]\s*\d{1,3}\s*[)）])"
+)
+_INLINE_ANNOTATION_RE = re.compile(
+    r"^\s*(?:[,，;；:：、]\s*)?[）)]?\s*"
+    r"(?P<annotation>[（(][^）)]{0,120}[）)]|\d{4}\s*年?\s*版)"
+)
+_CODE_SEARCH_TRANSLATION = str.maketrans(
+    {"／": "/", "－": "-", "–": "-", "—": "-", "﹣": "-", "　": " "}
+)
+
+
+def _iter_logical_segments(raw: str) -> list[str]:
+    """Split references at lines and numbered list items, not editions."""
+
+    boundaries = [0]
+    for match in _LOGICAL_ITEM_BOUNDARY_RE.finditer(raw):
+        boundary = match.end() if match.group(0) else match.start()
+        if boundary > boundaries[-1]:
+            boundaries.append(boundary)
+    boundaries.append(len(raw))
+    return [
+        raw[start:end]
+        for start, end in zip(boundaries, boundaries[1:])
+        if raw[start:end].strip()
+    ]
+
+
+def _locate_segment_codes(segment: str) -> list[tuple[object, int]]:
+    """Pair extracted codes with positions in the same logical segment."""
+
+    searchable = segment.translate(_CODE_SEARCH_TRANSLATION)
+    located: list[tuple[object, int]] = []
+    search_from = 0
+    for code in extract_standard_codes(segment):
+        position = searchable.find(code.raw, search_from)
+        if position < 0:
+            position = searchable.find(code.raw)
+        if position < 0:
+            continue
+        located.append((code, position))
+        search_from = position + len(code.raw)
+    located.sort(key=lambda item: item[1])
+    return located
+
+
+def _parse_inline_edition(text: str):
+    match = _INLINE_ANNOTATION_RE.match(text)
+    return parse_edition(match.group("annotation")) if match else parse_edition("")
+
+
 def extract_standards_from_text(text: str) -> List[StandardInfo]:
     """Extract references without sending the design document to a remote LLM.
 
@@ -31,59 +82,69 @@ def extract_standards_from_text(text: str) -> List[StandardInfo]:
     if not text or not text.strip():
         return []
 
+    raw = str(text)
     standards: list[StandardInfo] = []
     seen: set[tuple[str, str, str | None]] = set()
-    raw = str(text)
-    quoted_names = list(re.finditer(r"《(?P<name>[^》]{1,500})》", raw))
-    codes = extract_standard_codes(raw)
+    for segment in _iter_logical_segments(raw):
+        quoted_names = list(re.finditer(r"《(?P<name>[^》]{1,500})》", segment))
+        located_codes = _locate_segment_codes(segment)
+        associated_quotes: set[int] = set()
 
-    for code in codes:
-        position = raw.find(code.raw)
-        name = ""
-        if position >= 0:
+        for index, (code, position) in enumerate(located_codes):
+            name = ""
             candidates = [item for item in quoted_names if item.end() <= position]
-            if candidates and position - candidates[-1].end() <= 180:
-                between = raw[candidates[-1].end() : position]
+            selected = candidates[-1] if candidates and position - candidates[-1].end() <= 180 else None
+            if selected:
+                between = segment[selected.end() : position]
                 if not extract_standard_codes(between):
-                    name = clean_standard_name(candidates[-1].group("name"))
-        # Edition suffixes are defined relative to the code and must not leak
-        # from a preceding reference in the same paragraph.
-        nearby = raw[position + len(code.raw) : position + len(code.raw) + 100]
-        next_codes = extract_standard_codes(nearby)
-        if next_codes:
-            nearby = nearby[: nearby.find(next_codes[0].raw)]
-        edition_info = parse_edition(nearby)
-        key = (code.normalized, name, edition_info.edition)
-        if key in seen:
-            continue
-        seen.add(key)
-        standards.append(
-            StandardInfo(
-                code=code.normalized,
-                base_code=code.base_code,
-                normalized_code=code.normalized,
-                name=name or None,
-                year=code.year,
-                edition=edition_info.edition,
-                revision_year=edition_info.revision_year,
-                amendment=edition_info.amendment,
-            )
-        )
+                    name = clean_standard_name(selected.group("name"))
+                    associated_quotes.add(selected.start())
 
-    # Preserve quoted, name-only references for the existing workflow.
-    for match in quoted_names:
-        name = clean_standard_name(match.group("name"))
-        if not name:
-            continue
-        has_nearby_code = any(
-            0 <= raw.find(code.raw) - match.end() <= 180 for code in codes
-        )
-        if has_nearby_code:
-            continue
-        key = ("", name, None)
-        if key not in seen:
+            next_position = (
+                located_codes[index + 1][1] if index + 1 < len(located_codes) else len(segment)
+            )
+            edition_info = _parse_inline_edition(
+                segment[position + len(code.raw) : next_position]
+            )
+            key = (code.normalized, name, edition_info.edition)
+            if key in seen:
+                continue
             seen.add(key)
-            standards.append(StandardInfo(code="", name=name, year=None))
+            standards.append(
+                StandardInfo(
+                    code=code.normalized,
+                    base_code=code.base_code,
+                    normalized_code=code.normalized,
+                    name=name or None,
+                    year=code.year,
+                    edition=edition_info.edition,
+                    revision_year=edition_info.revision_year,
+                    amendment=edition_info.amendment,
+                )
+            )
+
+        # Preserve quoted, name-only references within this logical item.
+        for match in quoted_names:
+            if match.start() in associated_quotes:
+                continue
+            name = clean_standard_name(match.group("name"))
+            if not name:
+                continue
+            edition_info = _parse_inline_edition(segment[match.end() :])
+            key = ("", name, edition_info.edition)
+            if key in seen:
+                continue
+            seen.add(key)
+            standards.append(
+                StandardInfo(
+                    code="",
+                    name=name,
+                    year=None,
+                    edition=edition_info.edition,
+                    revision_year=edition_info.revision_year,
+                    amendment=edition_info.amendment,
+                )
+            )
 
     # If a deployment explicitly opts in, use remote extraction only as an
     # enhancement after local extraction. The default remains privacy-safe.

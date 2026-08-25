@@ -25,6 +25,11 @@ _CODE_WITHOUT_YEAR_RE = re.compile(
     rf"(?P<prefix>{_PREFIX})\s*(?P<serial>[A-Z0-9IOl()/.]+(?:\s*[-.]\s*[A-Z0-9IOl()/.]+)*)",
     re.IGNORECASE,
 )
+_ATLAS_CODE_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<prefix>[0-9]{2,4}[A-Z]{1,4})"
+    r"(?P<serial>[0-9]{3,}(?:\s*[-.]\s*[0-9]+)+)(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
 _EDITION_RE = re.compile(
     r"[（(]\s*(?P<year>\d{4})\s*年?\s*版\s*[)）]|(?P<year2>\d{4})\s*年?\s*版"
 )
@@ -94,6 +99,27 @@ def _build_match(match: re.Match[str]) -> ParsedStandardCode:
     )
 
 
+def _build_atlas_match(match: re.Match[str]) -> ParsedStandardCode:
+    prefix = re.sub(r"\s+", "", match.group("prefix")).upper()
+    serial = _numeric_ocr_fix(re.sub(r"\s+", "", match.group("serial"))).upper()
+    return ParsedStandardCode(
+        raw=match.group(0),
+        normalized=f"{prefix}{serial}",
+        prefix=prefix,
+        serial=serial,
+    )
+
+
+def _has_numeric_serial(parsed: ParsedStandardCode) -> bool:
+    return bool(re.search(r"\d", parsed.serial))
+
+
+def _is_spurious_isolated_prefix(parsed: ParsedStandardCode) -> bool:
+    """Reject a bare prefix such as ``GB`` parsed as ``G B``."""
+
+    return not _has_numeric_serial(parsed) and parsed.prefix.isalpha() and len(parsed.prefix) == 1
+
+
 def parse_standard_code(value: str | None) -> ParsedStandardCode | None:
     """Parse one code from a string, returning ``None`` for non-standard text."""
 
@@ -102,12 +128,17 @@ def parse_standard_code(value: str | None) -> ParsedStandardCode | None:
     text = _normalize_code_punctuation(str(value)).strip().replace("（", "(").replace("）", ")")
     match = _CODE_WITH_YEAR_RE.search(text)
     if match:
-        return _build_match(match)
+        parsed = _build_match(match)
+        return None if _is_spurious_isolated_prefix(parsed) else parsed
+    atlas_match = _ATLAS_CODE_RE.search(text)
+    if atlas_match:
+        return _build_atlas_match(atlas_match)
     if re.fullmatch(r"T/[A-Z]+", text, re.IGNORECASE):
         return None
     match = _CODE_WITHOUT_YEAR_RE.search(text)
     if match:
-        return _build_match(match)
+        parsed = _build_match(match)
+        return None if _is_spurious_isolated_prefix(parsed) else parsed
     return None
 
 
@@ -118,17 +149,32 @@ def extract_standard_codes(text: str | None) -> list[ParsedStandardCode]:
         return []
     text = _normalize_code_punctuation(str(text))
     found: list[ParsedStandardCode] = []
+    seen: set[str] = set()
     occupied: list[tuple[int, int]] = []
     for match in _CODE_WITH_YEAR_RE.finditer(text):
         parsed = _build_match(match)
-        if parsed.normalized not in {item.normalized for item in found}:
+        if _is_spurious_isolated_prefix(parsed):
+            continue
+        if parsed.normalized not in seen:
+            seen.add(parsed.normalized)
+            found.append(parsed)
+        occupied.append(match.span())
+    for match in _ATLAS_CODE_RE.finditer(text):
+        if any(start < match.end() and match.start() < end for start, end in occupied):
+            continue
+        parsed = _build_atlas_match(match)
+        if parsed.normalized not in seen:
+            seen.add(parsed.normalized)
             found.append(parsed)
         occupied.append(match.span())
     for match in _CODE_WITHOUT_YEAR_RE.finditer(text):
         if any(start <= match.start() < end for start, end in occupied):
             continue
         parsed = _build_match(match)
-        if parsed.normalized not in {item.normalized for item in found}:
+        if _is_spurious_isolated_prefix(parsed):
+            continue
+        if parsed.normalized not in seen:
+            seen.add(parsed.normalized)
             found.append(parsed)
     return found
 
