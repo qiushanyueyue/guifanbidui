@@ -93,8 +93,8 @@ STATUS_LABELS = {
     StandardStatus.ABOLISHED: "废止",
     StandardStatus.REPLACED: "被替代",
     StandardStatus.PARTIALLY_AMENDED: "局部修订",
-    StandardStatus.UNKNOWN: "待核验",
-    StandardStatus.CONFLICT: "来源冲突",
+    StandardStatus.UNKNOWN: "暂无法确认",
+    StandardStatus.CONFLICT: "暂无法确认",
 }
 
 

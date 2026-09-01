@@ -14,6 +14,13 @@ def test_partial_csres_checkpoint_resumes_from_saved_offset():
     assert verify_v2_csres.resume_start(candidate_count=120, checkpoint_offset=25) == 25
 
 
+def test_unknown_cycle_skips_codes_with_an_already_verified_edition():
+    assert verify_v2_csres.unresolved_unknown_codes(
+        {"GB 50038-2005", "GB 50096-2011"},
+        {"GB 50038-2005"},
+    ) == {"GB 50096-2011"}
+
+
 def test_scheduled_workflows_publish_v2_only():
     workflow_names = ["standards-daily.yml", "standards-weekly.yml", "standards-monthly.yml"]
     contents = [
@@ -27,6 +34,10 @@ def test_scheduled_workflows_publish_v2_only():
         assert "scripts/sync_incremental.py" not in content
         assert "scripts/verify_existing.py" not in content
         assert "scripts/full_reconcile.py" not in content
+
+    assert "--unknown-only" in contents[0]
+    assert "--unknown-only" in contents[1]
+    assert "--resume" in contents[2]
 
 
 def test_hobby_cron_is_not_more_frequent_than_daily():

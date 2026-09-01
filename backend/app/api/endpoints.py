@@ -1,4 +1,4 @@
-"""HTTP API; ordinary queries are database-only and never crawl third parties."""
+"""HTTP API backed by fresh cache with bounded query-time metadata refresh."""
 
 from __future__ import annotations
 
@@ -45,15 +45,30 @@ from app.repositories.standard_repo import StandardRepo
 from app.repositories.standard_v2_repo import StandardV2Repo
 from app.services.extractor import extract_standards_from_text
 from app.services.standard_matcher import assess_standard_match
+from app.services.business_conclusion import business_conclusion
+from app.services.live_verification import (
+    cache_is_fresh,
+    discover_live,
+    live_refresh_enabled,
+    persist_discovered_standard,
+    persist_live_verification,
+    verify_live,
+)
+from app.sources.soujianzhu import canonical_soujianzhu_full_text_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 def _source_info(source: StandardSourceModel) -> SourceInfo:
+    source_url = (
+        canonical_soujianzhu_full_text_url(source.source_url)
+        if source.source_name == "soujianzhu"
+        else source.source_url
+    )
     return SourceInfo(
         name=source.source_name,
-        url=source.source_url,
+        url=source_url,
         code=source.source_code,
         name_text=source.source_name_text,
         status=normalize_status(source.source_status),
@@ -65,9 +80,14 @@ def _source_info(source: StandardSourceModel) -> SourceInfo:
 
 
 def _source_info_v2(source: StandardV2SourceModel) -> SourceInfo:
+    source_url = (
+        canonical_soujianzhu_full_text_url(source.source_url)
+        if source.source_name == "soujianzhu"
+        else source.source_url
+    )
     return SourceInfo(
         name=source.source_name,
-        url=source.source_url,
+        url=source_url,
         status=normalize_status(source.observed_status),
         raw_status=source.observed_status,
         fetched_at=source.fetched_at,
@@ -93,9 +113,10 @@ def _result(db: Session, standard: StandardModel, *, source: str = "db") -> Sear
         name=standard.name or "",
         status=resolved_status,
         status_label=status_label(resolved_status),
+        business_conclusion=business_conclusion(standard),
         url=standard.canonical_url or standard.url,
         source=source,
-        soujianzhu_url=standard.soujianzhu_url,
+        soujianzhu_url=canonical_soujianzhu_full_text_url(standard.soujianzhu_url),
         edition=standard.edition,
         revision_year=standard.revision_year,
         amendment=standard.amendment,
@@ -128,16 +149,17 @@ def _result_v2(db: Session, standard: StandardV2Model, *, source: str = "db_v2")
     targets = [db.get(StandardV2Model, item.target_standard_id) for item in replaced_by_rows]
     replaced_by = "; ".join(item.base_code for item in targets if item is not None) or None
     resolved_status = normalize_status(standard.status)
-    return SearchResult(
+    result = SearchResult(
         id=standard.id,
         code=standard.code,
         normalized_code=standard.normalized_code,
         name=standard.name,
         status=resolved_status,
         status_label=status_label(resolved_status),
+        business_conclusion=business_conclusion(standard),
         url=source_map.get("csres") or source_map.get("soujianzhu"),
         source=source,
-        soujianzhu_url=source_map.get("soujianzhu"),
+        soujianzhu_url=canonical_soujianzhu_full_text_url(source_map.get("soujianzhu")),
         edition=standard.edition,
         revision_year=standard.revision_year,
         amendment=standard.amendment,
@@ -155,6 +177,9 @@ def _result_v2(db: Session, standard: StandardV2Model, *, source: str = "db_v2")
         data_quality_status=standard.data_quality_status,
         document_kind=standard.document_kind,
     )
+    if replaced_by:
+        result.business_conclusion = business_conclusion(result)
+    return result
 
 
 def _repo(db: Session):
@@ -367,6 +392,14 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     if standard is None and request.name:
         matches = repo.search(db, request.name, limit=1)
         standard = matches[0] if matches else None
+    if standard is None and live_refresh_enabled():
+        try:
+            discovered = discover_live(code=request.code, name=request.name)
+            if discovered is not None:
+                standard = persist_discovered_standard(db, discovered, use_v2=repo is StandardV2Repo)
+        except Exception:
+            db.rollback()
+            logger.exception("query-time discovery failed for code=%s", request.code)
     if standard is None:
         return VerifyResponse(
             input_code=request.code,
@@ -374,6 +407,19 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
             match_type="not_found",
             message="本地规范库未找到匹配记录",
         )
+    if live_refresh_enabled() and not cache_is_fresh(standard):
+        source_urls = {
+            source.source_name: source.source_url
+            for source in repo.sources_for(db, standard.id)
+            if source.source_url
+        }
+        try:
+            refreshed = verify_live(standard, source_urls=source_urls)
+            if refreshed is not None:
+                persist_live_verification(db, standard, refreshed)
+        except Exception:
+            db.rollback()
+            logger.exception("query-time verification failed for standard_id=%s", standard.id)
     result = _to_result(db, standard)
     decision = assess_standard_match(input_code=request.code, input_name=request.name, standard=standard)
     result.match_type = decision.match_type
@@ -422,7 +468,7 @@ def export_standards(request: ExportRequest, db: Session = Depends(get_db)):
             matches = repo.search(db, item.name, limit=1)
             standard = matches[0] if matches else None
         if standard is None:
-            values = [item.name or "", item.code, "", "", "", "待核验", "not_found", "", "", "", "", "", ""]
+            values = [item.name or "", item.code, "", "", "", "暂无法确认", "not_found", "", "", "", "", "", ""]
         else:
             result = _to_result(db, standard)
             decision = assess_standard_match(input_code=item.code, input_name=item.name, standard=standard)

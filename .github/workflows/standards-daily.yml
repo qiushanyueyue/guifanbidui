@@ -23,6 +23,6 @@ jobs:
       - name: Migrate additive V2 schema
         run: python scripts/migrate_v2.py
       - name: Verify a conservative CSRES delta
-        run: python scripts/verify_v2_csres.py --limit 25 --resume
+        run: python scripts/verify_v2_csres.py --limit 25 --unknown-only
       - name: Publish staged evidence through the quality gate
         run: python scripts/rebuild_v2.py

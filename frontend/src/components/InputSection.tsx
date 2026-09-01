@@ -36,7 +36,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onExtract, onCheckAl
                     填入示例
                 </button>
             </div>
-            <label className="sr-only" htmlFor="standards-input">待核验规范文本</label>
+            <label className="sr-only" htmlFor="standards-input">待查规范文本</label>
             <textarea
                 id="standards-input"
                 value={text}

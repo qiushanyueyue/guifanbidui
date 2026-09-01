@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.services.standard_normalizer import normalize_standard_code, normalized_name
+from app.services.business_conclusion import business_conclusion, revision_requirement
 
 
 @dataclass(frozen=True)
@@ -18,8 +19,8 @@ class MatchDecision:
 def _citation(standard: object) -> str:
     name = str(getattr(standard, "name", "") or "").strip()
     code = str(getattr(standard, "normalized_code", "") or getattr(standard, "code", "") or "").strip()
-    edition = str(getattr(standard, "edition", "") or "").strip()
-    suffix = f"（{edition}）" if edition else ""
+    revision = revision_requirement(standard)
+    suffix = f"（{revision}）" if revision else ""
     return f"《{name}》{code}{suffix}" if name else f"{code}{suffix}"
 
 
@@ -37,15 +38,12 @@ def assess_standard_match(*, input_code: str | None, input_name: str | None, sta
     status_decisions = {
         "abolished": ("obsolete", "该标准已废止"),
         "replaced": ("replaced", "该标准已被替代"),
-        "conflict": ("source_conflict", "第三方来源信息冲突，需人工核验"),
+        "conflict": ("source_conflict", "来源信息冲突，暂无法确认"),
     }
     citation = _citation(standard)
     if status in status_decisions:
         match_type, message = status_decisions[status]
         return MatchDecision(match_type, 0.0, citation, message)
-    if status == "unknown":
-        return MatchDecision("unknown", 0.0, citation, "来源未确认当前状态，需人工核验")
-
     wanted_code = normalize_standard_code(input_code)
     actual_code = normalize_standard_code(getattr(standard, "normalized_code", None) or getattr(standard, "code", None))
     wanted_name = normalized_name(input_name)
@@ -57,8 +55,14 @@ def assess_standard_match(*, input_code: str | None, input_name: str | None, sta
         return MatchDecision("code_mismatch", 0.0, citation, "标准编号不一致")
     if wanted_name and actual_name and wanted_name != actual_name:
         return MatchDecision("name_mismatch", 0.5, citation, "标准名称不一致")
-    if getattr(standard, "edition", None) and str(getattr(standard, "edition")) not in str(input_code or ""):
-        return MatchDecision("revision_missing", 0.95, citation, "引用缺少当前修订版信息")
+    revision = revision_requirement(standard)
+    if revision:
+        reference = str(input_code or "")
+        missing_parts = [part for part in revision.split("+") if part not in reference]
+        if missing_parts:
+            return MatchDecision("revision_missing", 0.95, citation, f"规范现行，但引用需采用{revision}")
     if not wanted_code and not wanted_name:
         return MatchDecision("unknown", 0.0, citation, "缺少可判定的编号或名称")
-    return MatchDecision("exact", 1.0, citation, "引用与规范库记录一致")
+    if status == "unknown":
+        return MatchDecision("exact", 1.0, citation, "引用与来源记录完全一致；规范状态暂无法确认")
+    return MatchDecision("exact", 1.0, citation, f"引用一致；{business_conclusion(standard)}")

@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -72,7 +73,17 @@ def test_two_agreeing_sources_are_cross_verified():
     assert row.verification_level == "cross_verified"
 
 
-def test_identity_agreement_plus_one_usable_status_is_cross_verified():
+@pytest.mark.parametrize("source_name", ["soujianzhu", "csres"])
+def test_explicit_single_third_party_status_can_publish_current(source_name):
+    db = _db()
+    stage_record(db, **_record(source_name=source_name, raw_status="现行"))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.status == "current"
+    assert row.verification_level == "single_source"
+
+
+def test_identity_agreement_plus_one_usable_status_remains_single_source():
     db = _db()
     stage_record(db, **_record(raw_status=None))
     stage_record(
@@ -86,7 +97,39 @@ def test_identity_agreement_plus_one_usable_status_is_cross_verified():
     publish_staging(db)
     row = db.query(StandardV2Model).one()
     assert row.status == "current"
-    assert row.verification_level == "cross_verified"
+    assert row.verification_level == "single_source"
+
+
+def test_official_status_is_final_when_third_party_disagrees():
+    db = _db()
+    stage_record(db, **_record(source_name="mohurd", raw_status="现行"))
+    stage_record(db, **_record(source_name="csres", source_url="https://example.test/csres/1", raw_status="废止"))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.status == "current"
+    assert row.verification_level == "official"
+    assert row.source_conflict is False
+
+
+def test_official_identity_is_final_when_third_party_name_disagrees():
+    db = _db()
+    stage_record(db, **_record(source_name="mohurd", raw_name="建筑设计防火规范", raw_status="现行"))
+    stage_record(db, **_record(source_name="csres", source_url="https://example.test/csres/1", raw_name="第三方错误名称", raw_status="废止"))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.name == "建筑设计防火规范"
+    assert row.status == "current"
+    assert row.verification_level == "official"
+
+
+def test_third_party_replacement_disagreement_is_conflict():
+    db = _db()
+    stage_record(db, **_record(raw_status="废止", raw_relation_text="被 GB 55037-2022 替代"))
+    stage_record(db, **_record(source_name="csres", source_url="https://example.test/csres/1", raw_status="废止", raw_relation_text="被 GB 55036-2022 替代"))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.status == "conflict"
+    assert row.verification_level == "conflict"
 
 
 def test_conflicting_third_party_statuses_are_visible():

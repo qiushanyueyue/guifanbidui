@@ -22,11 +22,11 @@ export const STATUS_LABELS: Record<StandardStatus, string> = {
     abolished: '废止',
     replaced: '被替代',
     partially_amended: '局部修订',
-    unknown: '待核验',
-    conflict: '来源冲突'
+    unknown: '暂无法确认',
+    conflict: '暂无法确认'
 };
 
-export const statusLabel = (status: StandardStatus | string | undefined): string => STATUS_LABELS[status as StandardStatus] || '待核验';
+export const statusLabel = (status: StandardStatus | string | undefined): string => STATUS_LABELS[status as StandardStatus] || '暂无法确认';
 export const isInactiveStatus = (status: StandardStatus | string | undefined): boolean => ['abolished', 'replaced'].includes(status || '');
 
 export interface SearchResult {
@@ -36,6 +36,7 @@ export interface SearchResult {
     name: string;
     status: StandardStatus;
     status_label?: string | null;
+    business_conclusion?: string | null;
     url?: string | null;
     source?: string;
     soujianzhu_url?: string | null;

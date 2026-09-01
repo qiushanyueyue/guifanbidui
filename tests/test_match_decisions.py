@@ -75,13 +75,14 @@ def test_exact_reference_is_not_reduced_to_percentage():
     assert result.confidence == 1.0
 
 
-def test_unknown_source_status_is_visible_even_when_code_matches():
+def test_unknown_status_does_not_hide_an_exact_identity_match():
     result = _matcher()(
         input_code="GB 50016-2014",
         input_name="建筑设计防火规范",
         standard=_standard(status="unknown"),
     )
-    assert result.match_type == "unknown"
+    assert result.match_type == "exact"
+    assert result.message == "引用与来源记录完全一致；规范状态暂无法确认"
 
 
 def test_explicit_current_edition_is_exact():
@@ -91,3 +92,14 @@ def test_explicit_current_edition_is_exact():
         standard=_standard(edition="2018年版", revision_year="2018"),
     )
     assert result.match_type == "exact"
+
+
+def test_local_amendment_is_included_in_recommended_citation():
+    result = _matcher()(
+        input_code="GB 50016-2014（2018年版）",
+        input_name="建筑设计防火规范",
+        standard=_standard(edition="2018年版", revision_year="2018", amendment="2024年局部修订"),
+    )
+    assert result.match_type == "revision_missing"
+    assert result.recommended_citation == "《建筑设计防火规范》GB 50016-2014（2018年版+2024年局部修订）"
+    assert result.message == "规范现行，但引用需采用2018年版+2024年局部修订"

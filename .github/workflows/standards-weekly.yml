@@ -23,7 +23,7 @@ jobs:
       - name: Migrate additive V2 schema
         run: python scripts/migrate_v2.py
       - name: Verify a bounded V2 batch
-        run: python scripts/verify_v2_csres.py --limit 100 --resume
+        run: python scripts/verify_v2_csres.py --limit 100 --unknown-only
       - name: Publish staged evidence through the quality gate
         run: python scripts/rebuild_v2.py
       - name: Run golden decisions

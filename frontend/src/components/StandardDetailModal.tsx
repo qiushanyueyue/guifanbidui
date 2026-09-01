@@ -97,7 +97,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                                         <div className="timeline-code">{detail.code}</div>
                                         {detail.status && (
                                             <div className={detail.status === 'current' ? 'current-tag' : 'abolished-tag'}>
-                                                {detail.status_label || statusLabel(detail.status)}
+                                                {detail.business_conclusion || detail.status_label || statusLabel(detail.status)}
                                             </div>
                                         )}
                                     </div>
@@ -108,7 +108,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                                         <div className="timeline-content">
                                             <div className="timeline-tag">被替代为:</div>
                                             <div className="timeline-text">{fullDetail.replaced_by}</div>
-                                            <div className="current-tag">后续规范（待核验）</div>
+                                            <div className="current-tag">后续规范（需确认替代关系）</div>
                                         </div>
                                     </div>
                                 )}
@@ -123,7 +123,7 @@ export const StandardDetailModal: React.FC<StandardDetailModalProps> = ({
                             <div className="header-meta">
                                 <span>规范编号: {detail.code}</span>
                                 {detail.status && <span className={`status-tag ${getStatusClass(detail.status)}`}>
-                                    {detail.status_label || statusLabel(detail.status)}
+                                    {detail.business_conclusion || detail.status_label || statusLabel(detail.status)}
                                 </span>}
                             </div>
                             <div className="header-badges">

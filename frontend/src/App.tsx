@@ -79,13 +79,16 @@ function App() {
     setIsLoading(true);
     try {
       const extracted = await api.extractStandards(text);
+      const nonEmptyStandards = extracted.filter((standard) => (
+        Boolean(standard.code?.trim()) || Boolean(standard.name?.trim())
+      ));
       setResultsMap({}); // Clear previous results to avoid flickering or stale data
-      setStandards(extracted);
-      if (extracted.length === 0) {
+      setStandards(nonEmptyStandards);
+      if (nonEmptyStandards.length === 0) {
         alert('未提取到规范信息，请检查输入格式');
         return;
       }
-      await checkStandards(extracted);
+      await checkStandards(nonEmptyStandards);
     } catch (error: unknown) {
       console.error('Error extracting standards:', error);
       const errorMsg = error instanceof Error ? error.message : '未知错误';

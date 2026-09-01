@@ -30,6 +30,20 @@ def test_soujianzhu_fixture_parser():
     records = parse_soujianzhu_recent_html((FIXTURES / "soujianzhu_recent.html").read_text())
     assert records[0].normalized_code == "GB 55001-2021"
     assert records[1].edition == "2018年版"
+    assert "/NormAndRules/NormContent.aspx?id=" in records[0].source_url
+
+
+def test_soujianzhu_explicit_status_is_preserved_as_third_party_evidence():
+    records = parse_soujianzhu_recent_html(
+        """
+        <table>
+          <tr><td><a href="/NormAndRules/gfnr.aspx?id=1">《工程结构通用规范》GB 55001-2021</a></td><td>现行</td></tr>
+          <tr><td><a href="/NormAndRules/gfnr.aspx?id=2">《旧规范》GB 50000-2001</a></td><td>已废止</td></tr>
+        </table>
+        """
+    )
+    assert [record.source_status for record in records] == ["现行", "已废止"]
+    assert records[0].source_url == "https://www.soujianzhu.cn/NormAndRules/NormContent.aspx?id=1"
 
 
 def test_csres_structure_change_is_visible():

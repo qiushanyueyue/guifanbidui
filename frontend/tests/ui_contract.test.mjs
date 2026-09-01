@@ -27,8 +27,9 @@ test('primary interface does not use emoji as controls or section icons', () => 
   }
 });
 
-test('interactive controls keep a 44px minimum touch target', () => {
-  assert.doesNotMatch(appCss, /min-height:\s*(?:[0-3]?\d|4[0-3])px/);
+test('compact desktop source actions restore a 44px mobile touch target', () => {
+  assert.match(appCss, /\.source-action\s*\{[\s\S]*?min-height:\s*36px/);
+  assert.match(appCss, /@media\s*\(max-width:\s*768px\)[\s\S]*?\.source-action\s*\{[\s\S]*?min-height:\s*44px/);
 });
 
 test('results use a stable row identity instead of code-only keys', () => {
@@ -50,18 +51,43 @@ test('source search links remain available when the local lookup is missing', ()
   assert.match(comparisonTable, /工标网搜索/);
 });
 
-test('soujianzhu and csres actions share one fixed button size', () => {
-  assert.match(comparisonTable, /const sourceActionStyle/);
-  assert.match(comparisonTable, /width:\s*'96px'/);
-  assert.match(comparisonTable, /minWidth:\s*'96px'/);
-  assert.match(comparisonTable, /flexShrink:\s*0/);
-  assert.match(comparisonTable, /minHeight:\s*'44px'/);
-  assert.equal((comparisonTable.match(/\.\.\.sourceActionStyle/g) || []).length, 3);
+test('soujianzhu and csres actions share one compact polished button style', () => {
+  assert.doesNotMatch(comparisonTable, /sourceActionStyle/);
+  assert.match(appCss, /\.source-action\s*\{[\s\S]*?width:\s*84px/);
+  assert.match(appCss, /\.source-action\s*\{[\s\S]*?border-radius:\s*7px/);
+  assert.match(appCss, /\.source-action:hover/);
+  assert.match(appCss, /\.source-action:focus-visible/);
+  assert.match(comparisonTable, /source-action--soujianzhu/);
+  assert.match(comparisonTable, /source-action--search/);
+  assert.match(comparisonTable, /source-action--csres/);
+  assert.match(comparisonTable, /source-action--csres-search/);
+});
+
+test('extraction drops rows whose name and code are both blank', () => {
+  assert.match(app, /const nonEmptyStandards = extracted\.filter/);
+  assert.match(app, /standard\.code\?\.trim\(\)/);
+  assert.match(app, /standard\.name\?\.trim\(\)/);
+  assert.match(app, /setStandards\(nonEmptyStandards\)/);
+  assert.match(app, /checkStandards\(nonEmptyStandards\)/);
 });
 
 test('revision-missing results explicitly drive the code highlight', () => {
   assert.match(comparisonTable, /matchType\s*===\s*['"]revision_missing['"]/);
   assert.match(comparisonTable, /revisionMismatch/);
+});
+
+test('exact matches are presented as fully consistent without pending verification text', () => {
+  assert.match(comparisonTable, /exact:\s*'完全一致'/);
+  assert.match(comparisonTable, /const isExact = matchType === 'exact'/);
+  assert.match(comparisonTable, /const isConsistent = isExact \? matchLabel/);
+  assert.match(comparisonTable, /result\.business_conclusion \|\| result\.status_label \|\| statusLabel\(result\.status\)/);
+  assert.match(comparisonTable, /· 完全一致 \$\{batchCounts\.exact\}/);
+});
+
+test('unknown is reserved for exceptional cases and shown as temporarily unconfirmed', () => {
+  assert.doesNotMatch(comparisonTable, /待核验/);
+  assert.match(comparisonTable, /暂无法确认/);
+  assert.match(comparisonTable, />规范状态</);
 });
 
 test('empty results keep an actionable row and do not auto-check', () => {

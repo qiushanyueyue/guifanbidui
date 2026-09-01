@@ -60,6 +60,7 @@ class SearchResult(BaseModel):
     name: str = ""
     status: StandardStatus = StandardStatus.UNKNOWN
     status_label: Optional[str] = None
+    business_conclusion: Optional[str] = None
     url: Optional[str] = None
     source: Optional[str] = "db"
     soujianzhu_url: Optional[str] = None

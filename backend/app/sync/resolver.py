@@ -11,8 +11,7 @@ from app.models.enums import StandardStatus, VerificationLevel, normalize_status
 from app.models.models import StandardHistoryModel, StandardModel, StandardSourceModel
 from app.repositories.standard_repo import StandardRepo
 
-OFFICIAL_SOURCES = {"samr", "mohurd"}
-P1_SOURCES = {"openstd"}
+OFFICIAL_SOURCES = {"samr", "mohurd", "openstd"}
 SOURCE_PRIORITY = {"mohurd": 0, "samr": 0, "openstd": 1, "soujianzhu": 2, "csres": 3}
 
 
@@ -44,14 +43,15 @@ def resolve_status(sources: list[StandardSourceModel], existing_status: str | No
         }
 
     official = [source for source in usable if source.source_name in OFFICIAL_SOURCES]
-    p1 = [source for source in usable if source.source_name in P1_SOURCES]
-    selected_pool = official or p1 or usable
+    selected_pool = official or usable
     selected_pool.sort(key=_source_sort_key)
     status_values = {normalize_status(source.source_status) for source in selected_pool}
     all_status_values = {normalize_status(source.source_status) for source in usable}
     selected = selected_pool[0]
-    conflict = len(status_values) > 1 or (official and len(all_status_values) > 1)
-    third_party_only = not official and not p1
+    # A clear official conclusion is final. Third-party disagreement is kept
+    # in source evidence but does not downgrade the public business status.
+    conflict = len(status_values) > 1
+    third_party_only = not official
     same_level_conflict = len(status_values) > 1 and (
         third_party_only
         or len({SOURCE_PRIORITY.get(item.source_name, 99) for item in selected_pool}) == 1
@@ -77,7 +77,7 @@ def resolve_status(sources: list[StandardSourceModel], existing_status: str | No
     return {
         "status": StandardStatus.CONFLICT if same_level_conflict else normalize_status(selected.source_status),
         "verification_level": verification,
-        "source_conflict": bool(conflict or len(all_status_values) > 1),
+        "source_conflict": bool(conflict),
         "conflict_details": details,
         "canonical_source": selected.source_name,
         "canonical_url": selected.source_url,

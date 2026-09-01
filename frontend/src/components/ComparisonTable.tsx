@@ -19,26 +19,6 @@ const formatDataUpdatedAt = (value: string | null): string => {
     }).format(parsed).replaceAll('/', '.');
 };
 
-const sourceActionStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxSizing: 'border-box',
-    width: '96px',
-    minWidth: '96px',
-    maxWidth: '96px',
-    flexShrink: 0,
-    minHeight: '44px',
-    padding: '4px 12px',
-    color: 'white',
-    borderRadius: '4px',
-    fontSize: '12px',
-    textDecoration: 'none',
-    lineHeight: '1.5',
-    border: 'none',
-    cursor: 'pointer',
-};
-
 interface ComparisonTableProps {
     standards: StandardInfo[];
     resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>; // New Prop
@@ -191,7 +171,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                         <th style={{ padding: '0 10px', minWidth: '170px' }}>规范编号(识别)</th>
                         <th style={{ padding: '0 10px', minWidth: '300px', textAlign: 'center' }}>匹配规范</th>
                         <th style={{ minWidth: '150px', padding: '12px 10px', textAlign: 'center', fontWeight: '600', color: '#666' }}>业务判定</th>
-                        <th style={{ minWidth: '90px', textAlign: 'center' }}>状态</th>
+                        <th style={{ minWidth: '220px', textAlign: 'center' }}>规范状态</th>
                         <th style={{ minWidth: '180px', textAlign: 'center' }}>匹配结果</th>
                         <th style={{ minWidth: '120px', textAlign: 'center' }}>搜建筑</th>
                         <th style={{ minWidth: '220px', textAlign: 'center' }}>操作</th>
@@ -263,9 +243,9 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                     <span><b className="legend-chip legend-current">现行</b> 可作为当前版本继续核对。</span>
                     <span><b className="legend-chip legend-update">需更新</b> 输入版本或编号与来源不一致。</span>
                     <span><b className="legend-chip legend-obsolete">已废止</b> 优先查看替代规范。</span>
-                    <span><b className="legend-chip legend-unknown">未收录</b> 可用右侧来源按钮继续检索。</span>
+                    <span><b className="legend-chip legend-unknown">暂无法确认</b> 仅用于来源不可用、未检索到或信息冲突。</span>
                 </div>
-                <p>结果仅供查新辅助使用，正式引用请以发布机构和原始文件为准。</p>
+                <p>系统已按来源证据给出查新结论；正式出图或审查前仍应以发布机构原始文件作为引用依据。</p>
             </div>
 
             {/* Modal Restored */}
@@ -311,13 +291,14 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
         name_mismatch: '规范名称错误',
         obsolete: '已废止',
         replaced: '被替代',
-        unknown: '待核验',
+        unknown: '暂无法确认',
         source_conflict: '来源冲突',
     };
     const matchType = result?.match_type || 'unknown';
-    const matchLabel = result ? (matchLabels[matchType] || '待核验') : '-';
-    const isIssue = matchType !== 'exact';
-    const isConsistent = result?.message || matchLabel;
+    const isExact = matchType === 'exact';
+    const matchLabel = result ? (matchLabels[matchType] || '暂无法确认') : '-';
+    const isIssue = !isExact;
+    const isConsistent = isExact ? matchLabel : (result?.message || matchLabel);
     const revisionMismatch = matchType === 'revision_missing'
         || isConsistent.includes('版本')
         || isConsistent.includes('修订版')
@@ -418,7 +399,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                     <div>
                         <div>{result.name} {result.code}</div>
                         <div style={{ fontSize: '11px', color: '#777', marginTop: '3px' }}>
-                            版本：{result.edition || result.revision_year || '原始版本'} · 来源：{result.canonical_source || '待核验'}
+                            版本：{result.edition || result.revision_year || '原始版本'} · 来源：{result.canonical_source || '暂无法确认'}
                         </div>
                         <div style={{ fontSize: '11px', color: '#999' }}>
                             最近核验：{result.last_verified_at ? result.last_verified_at.slice(0, 10) : '暂无'}
@@ -452,7 +433,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         borderRadius: '2px',
                         fontSize: '12px'
                     }}>
-                        {result.status_label || statusLabel(result.status)}
+                        {result.business_conclusion || result.status_label || statusLabel(result.status)}
                     </span>
                 )}
                 {resultStatus === 'not_found' && (
@@ -463,7 +444,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         borderRadius: '2px',
                         fontSize: '12px'
                     }}>
-                        未收录
+                        暂无法确认
                     </span>
                 )}
             </td>
@@ -497,11 +478,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         href={result?.soujianzhu_url || soujianzhuSearchUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn-link"
-                        style={{
-                            ...sourceActionStyle,
-                            backgroundColor: result?.soujianzhu_url ? '#0ea5e9' : '#64748b', // Blue for direct link, Slate (Greyish) for search
-                        }}
+                        className={`source-action ${result?.soujianzhu_url ? 'source-action--soujianzhu' : 'source-action--search'}`}
                     >
                         {result?.soujianzhu_url ? "搜建筑链接" : "搜建筑搜索"}
                     </a>
@@ -514,11 +491,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                     {result && csresUrl ? (
                         <button
                             onClick={() => onViewDetail({ ...result, url: csresUrl })}
-                            className="btn-link"
-                            style={{
-                                ...sourceActionStyle,
-                                backgroundColor: '#4f46e5',
-                            }}
+                            className="source-action source-action--csres"
                         >
                             工标网查看
                         </button>
@@ -531,11 +504,7 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                                 const keyword = standard.name || standard.code;
                                 openCsresSearch(keyword);
                             }}
-                            className="btn-link"
-                            style={{
-                                ...sourceActionStyle,
-                                backgroundColor: '#3b82f6', // Changed to button style
-                            }}
+                            className="source-action source-action--csres-search"
                         >
                             工标网搜索
                         </button>

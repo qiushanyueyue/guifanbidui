@@ -6,7 +6,7 @@ from app.models.models import StandardModel, StandardSourceModel
 from app.sync.resolver import resolve_canonical_standard, resolve_status
 
 
-def test_official_status_wins_but_conflict_is_preserved():
+def test_official_status_wins_without_downgrading_public_conclusion():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
@@ -21,10 +21,10 @@ def test_official_status_wins_but_conflict_is_preserved():
     db.flush()
     decision = resolve_status(standard and db.query(StandardSourceModel).all())
     assert decision["status"].value == "abolished"
-    assert decision["source_conflict"] is True
+    assert decision["source_conflict"] is False
     resolve_canonical_standard(db, standard)
     assert standard.status == "abolished"
-    assert standard.source_conflict is True
+    assert standard.source_conflict is False
 
 
 def test_same_priority_official_conflict_uses_conflict_status():

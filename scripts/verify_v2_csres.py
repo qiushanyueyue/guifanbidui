@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.models.base import SessionLocal  # noqa: E402
-from app.models.models import StagingStandardModel, SyncCheckpointModel, SyncRunModel  # noqa: E402
+from app.models.models import StandardV2Model, StagingStandardModel, SyncCheckpointModel, SyncRunModel  # noqa: E402
 from app.services.standard_normalizer import normalize_standard_code, normalized_name  # noqa: E402
 from app.sources.base import SourceError  # noqa: E402
 from app.sources.csres import CsresSource, SEARCH_URL  # noqa: E402
@@ -29,6 +29,12 @@ def resume_start(*, candidate_count: int, checkpoint_offset: int | None) -> int:
         return 0
     offset = max(0, checkpoint_offset or 0)
     return 0 if offset >= candidate_count else offset
+
+
+def unresolved_unknown_codes(unknown_codes: set[str], resolved_codes: set[str]) -> set[str]:
+    """Avoid rechecking an unknown base identity after a verified edition exists."""
+
+    return unknown_codes - resolved_codes
 
 
 def _best_exact(records, code: str, expected_name: str):
@@ -45,6 +51,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--unknown-only",
+        action="store_true",
+        help="prioritize only currently published unknown standards; each publish pass removes resolved rows",
+    )
     parser.add_argument(
         "--code",
         action="append",
@@ -69,7 +80,25 @@ def main() -> int:
             if code:
                 unique.setdefault(code, candidate)
         explicit_codes = [normalize_standard_code(code) for code in args.code]
-        codes = list(dict.fromkeys(code for code in explicit_codes if code)) or list(unique)
+        if explicit_codes:
+            codes = list(dict.fromkeys(code for code in explicit_codes if code))
+        elif args.unknown_only:
+            unknown_codes = {
+                row.base_code
+                for row in db.query(StandardV2Model.base_code)
+                .filter(StandardV2Model.status == "unknown")
+                .all()
+            }
+            resolved_codes = {
+                row.base_code
+                for row in db.query(StandardV2Model.base_code)
+                .filter(StandardV2Model.status != "unknown")
+                .all()
+            }
+            unresolved = unresolved_unknown_codes(unknown_codes, resolved_codes)
+            codes = [code for code in unique if code in unresolved]
+        else:
+            codes = list(unique)
         checkpoint = (
             db.query(SyncCheckpointModel)
             .filter(SyncCheckpointModel.source_name == "csres")
@@ -77,14 +106,20 @@ def main() -> int:
             .first()
         )
         explicit_mode = bool(explicit_codes)
-        start = 0 if explicit_mode or not args.resume else resume_start(
+        start = 0 if explicit_mode or args.unknown_only or not args.resume else resume_start(
             candidate_count=len(codes),
             checkpoint_offset=checkpoint.page_number if checkpoint else None,
         )
         selected = codes[start : start + max(1, args.limit)]
         run = SyncRunModel(
             source="csres",
-            mode="verify_v2_explicit" if explicit_mode else "verify_v2",
+            mode=(
+                "verify_v2_explicit"
+                if explicit_mode
+                else "verify_v2_unknown"
+                if args.unknown_only
+                else "verify_v2"
+            ),
             status="running",
             found=len(selected),
         )
@@ -153,7 +188,7 @@ def main() -> int:
                 failed.parse_status = "failed"
                 failed.parse_error = f"{exc.category}: {exc.__class__.__name__}"
                 run.failed += 1
-            if not explicit_mode:
+            if not explicit_mode and not args.unknown_only:
                 if checkpoint is None:
                     checkpoint = SyncCheckpointModel(source_name="csres", scope="verify_v2")
                     db.add(checkpoint)
@@ -164,7 +199,7 @@ def main() -> int:
             db.commit()
         run.finished_at = datetime.utcnow()
         run.status = "success" if run.failed == 0 else "partial"
-        if checkpoint is not None and not explicit_mode:
+        if checkpoint is not None and not explicit_mode and not args.unknown_only:
             checkpoint.status = "complete" if start + len(selected) >= len(codes) else "running"
         db.commit()
         print(

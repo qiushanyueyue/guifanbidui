@@ -23,6 +23,40 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://www.soujianzhu.cn"
 
 
+def canonical_soujianzhu_full_text_url(value: str | None) -> str | None:
+    """Return Soujianzhu's full-text reader URL for a known standard page."""
+
+    if not value:
+        return value
+    parsed = urllib.parse.urlsplit(value)
+    hostname = (parsed.hostname or "").lower()
+    if hostname != "soujianzhu.cn" and not hostname.endswith(".soujianzhu.cn"):
+        return value
+    if parsed.path.lower().rstrip("/") != "/normandrules/gfnr.aspx":
+        return value
+    query = urllib.parse.parse_qs(parsed.query)
+    standard_ids = query.get("id")
+    if not standard_ids or not standard_ids[0].strip():
+        return value
+    return urllib.parse.urlunsplit(
+        (
+            parsed.scheme or "https",
+            parsed.netloc,
+            "/NormAndRules/NormContent.aspx",
+            urllib.parse.urlencode({"id": standard_ids[0]}),
+            "",
+        )
+    )
+
+
+def _explicit_status(value: str | None) -> str | None:
+    """Return only a status explicitly printed by Soujianzhu metadata."""
+
+    compact = re.sub(r"\s+", "", str(value or ""))
+    match = re.search(r"(现行有效|现行|即将实施|已废止|废止|已作废|作废|被替代|局部修订)", compact)
+    return match.group(1) if match else None
+
+
 def parse_soujianzhu_recent_html(html: str, *, base_url: str = DEFAULT_BASE_URL) -> list[SourceRecord]:
     soup = BeautifulSoup(html, "html.parser")
     links = soup.find_all("a", href=True)
@@ -41,12 +75,24 @@ def parse_soujianzhu_recent_html(html: str, *, base_url: str = DEFAULT_BASE_URL)
             name, code, edition = split_standard_reference(context)
         if code is None:
             continue
+        container = link.find_parent(["tr", "li", "article"])
+        status_context = " ".join(
+            filter(
+                None,
+                [
+                    text,
+                    link.get("title", ""),
+                    container.get_text(" ", strip=True) if container is not None else "",
+                ],
+            )
+        )
         records.append(
             SourceRecord(
                 source_name="soujianzhu",
                 code=normalize_standard_code(code.normalized),
                 name=name,
-                source_url=href,
+                source_status=_explicit_status(status_context),
+                source_url=canonical_soujianzhu_full_text_url(href),
                 edition=edition.edition,
                 revision_year=edition.revision_year,
                 amendment=edition.amendment,
@@ -65,6 +111,7 @@ def parse_soujianzhu_recent_html(html: str, *, base_url: str = DEFAULT_BASE_URL)
                     source_name="soujianzhu",
                     code=code.normalized,
                     name=name,
+                    source_status=_explicit_status(page_text),
                     source_url=base_url,
                     edition=edition.edition,
                     revision_year=edition.revision_year,

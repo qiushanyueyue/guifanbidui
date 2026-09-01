@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -116,13 +117,27 @@ def _status_decision(rows: list[StagingStandardModel]) -> tuple[str, str, bool, 
         for row in rows
         if normalize_status(row.raw_status) != StandardStatus.UNKNOWN
     }
-    statuses = set(usable.values())
+    official = {name: value for name, value in usable.items() if name in {"samr", "mohurd", "openstd"}}
+    selected = official or usable
+    statuses = set(selected.values())
     if len(statuses) > 1:
-        return "conflict", "conflict", True, json.dumps(usable, ensure_ascii=False, sort_keys=True)
+        return "conflict", "conflict", True, json.dumps(selected, ensure_ascii=False, sort_keys=True)
     if not statuses:
         return "unknown", "unverified", False, None
-    distinct_sources = {row.source_name for row in rows}
-    verification = "cross_verified" if len(distinct_sources) > 1 else "single_source"
+    if official:
+        verification = "official"
+    else:
+        relation_values = {
+            re.sub(r"\s+", "", row.raw_relation_text or "")
+            for row in rows
+            if row.source_name in usable
+        }
+        if len(usable) > 1 and len(relation_values) > 1:
+            details = {row.source_name: row.raw_relation_text for row in rows if row.source_name in usable}
+            return "conflict", "conflict", True, json.dumps(details, ensure_ascii=False, sort_keys=True)
+        # Cross-verification requires two independent sources to explicitly
+        # agree on status. A link or identity-only row is not status evidence.
+        verification = "cross_verified" if len(usable) > 1 else "single_source"
     return next(iter(statuses)), verification, False, None
 
 
@@ -252,7 +267,9 @@ def publish_staging(db: Session) -> PublishReport:
     published = conflicts = single_source = cross_verified = 0
     for (code, explicit_edition), entries in groups.items():
         rows = [entry[0] for entry in entries]
-        names = {normalized_name(entry[2]): entry[2] for entry in entries}
+        official_entries = [entry for entry in entries if entry[0].source_name in {"samr", "mohurd", "openstd"}]
+        name_entries = official_entries or entries
+        names = {normalized_name(entry[2]): entry[2] for entry in name_entries}
         if len(names) > 1:
             for row in rows:
                 _quarantine(db, row, "name_conflict", "同一编号和版本出现多个名称")
