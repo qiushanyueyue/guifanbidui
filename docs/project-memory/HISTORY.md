@@ -89,6 +89,20 @@
 - supersedes: `2026-08-25-exact-match-consistent-label` 的“一致”文案，以及 ADR-0003 中第三方必须双源才可给出明确状态的部分。
 - remaining_risk: 修改尚未推送或部署生产；搜建筑真人验证无法保证不出现；部署后公网流程仍待验收。
 
+## 2026-09-01 — 明确查新策略生产部署与幂等修复
+
+- event_id: `2026-09-01-production-deploy-idempotent-discovery`
+- status: `production_verified`
+- scope: Vercel 生产部署、公网 API/浏览器验收、查询时发现幂等性与重复记录处置。
+- result:
+  - 提交 `3676dc3` 部署到现有 Vercel 项目后，截图三条流程已在 `guifan.108923.xyz` 实测通过。
+  - 公网首次补查将 `GB 50308-2017` 明确识别为现行 `GB/T 50308-2017`；另外两条显示“完全一致/现行”，搜建筑链接为 `NormContent.aspx`。
+  - 验收发现无名称输入可能重复写入发现记录；提交 `a8ac4f9` 增加按规范化发现编号复用记录，并再次成功部署。
+  - 精确确认重复 ID `5506/5507` 后，将较早的 `5506` 标记为 `quarantined`，未物理删除；连续两次仅编号查询后总数稳定为 1741，公开搜索只返回一条。
+- evidence: GitHub Vercel success；公网 `/api/health`、`/api/stats`、三条 `/api/v1/verify`；生产浏览器 DOM 与控制台；Neon 只读定位及条件更新返回值；后端 121 项、前端 14 项、ESLint、Vite build。
+- supersedes: `2026-09-01-query-time-discovery-single-source-fulltext` 的“尚未部署”状态。
+- remaining_risk: 搜建筑仍会按其风控跳转真人验证，无法由本站保证消失；生产仍有 1347 条 unknown，≥95% 明确判断率尚未整体达成。
+
 ## 追加模板
 
 ```markdown

@@ -1,33 +1,33 @@
 # 当前事实快照
 
 - snapshot_id: `2026-09-01-production-and-local-fix`
-- as_of: `2026-09-01T17:43:30+08:00`
-- verification: `mixed`
+- as_of: `2026-09-01T21:40:17+08:00`
+- verification: `production_verified`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 下列事实来自当日实际命令/API/浏览器验收；新对话必须重新核验会漂移的项目。
 
 ## 仓库与部署
 
-- as_of: `2026-09-01T17:43:30+08:00`
+- as_of: `2026-09-01T21:40:17+08:00`
 - verification: `production_verified`
 - evidence: GitHub CLI/API、Vercel 部署状态、公网 `/api/health`。
 
 - GitHub 可见性：Public；证据：`gh repo view qiushanyueyue/guifanbidui --json visibility,isPrivate,url` 与匿名 GitHub API。
-- 本地 `feat/standards-v2-rebuild` 已包含仓库级记忆系统（起始提交 `854c74d`，当前 HEAD 需实时复核）。
-- 远端分支：`origin/main`、`origin/feat/standards-v2-rebuild` 均指向 `4556b15`；证据：`git ls-remote origin ...`。
+- 明确查新功能生产提交为 `a8ac4f9`；远端功能分支仍为 `4556b15`，当前 HEAD/主线需实时复核。
 - 生产域名：`https://guifan.108923.xyz`。
 - Vercel 主线自动部署：Ready；当日部署 `guifanbidui-dywa7lp98-yys-projects-2b5b21c2.vercel.app`。
 - 公网健康：`/api/health` 返回 `status=ok`、`database=ok`。
+- Vercel 对提交 `a8ac4f9` 返回 `Deployment has completed`；现有项目和域名未更换。
 
 ## 数据快照
 
-- as_of: `2026-08-25T15:25:37+08:00`
+- as_of: `2026-09-01T21:40:17+08:00`
 - verification: `production_verified`
 - evidence: 公网 `/api/stats`、Neon 查询与 `artifacts/` 审计报告。
 
-- 规范总数：1740。
-- 状态：364 `current`、27 `abolished`、1349 `unknown`、0 `conflict`。
-- 数据库最近发布时间：`2026-09-01T09:43:30.536093Z`。
+- 规范总数：1741。
+- 状态：367 `current`、27 `abolished`、1347 `unknown`、0 `conflict`。
+- 数据库最近发布时间：`2026-09-01T13:37:59.240571Z`。
 - 公网来源健康：`samr/mohurd/openstd/soujianzhu=never`、`csres=partial`；这证明工标网仅做了部分核实，并未完成全库遍历。
 - V2 关系：32；补充规范性文件：230。
 - Excel `/Volumes/yue/Download/规范目录库20251011.xlsx` 已审计并补充候选；外部挂载路径本身不是运行时依赖。
@@ -40,7 +40,7 @@
 - verification: `tested`
 - evidence: 后端契约/回归测试与当日公网抽样。
 
-- `/api/search` 与 `/api/standards/search` 继续以数据库查询为主；本地新实现使 `/api/v1/verify` 在生产持久数据库中对过期或异常记录执行有界联网复核，该行为尚未部署生产。
+- `/api/search` 与 `/api/standards/search` 继续以数据库查询为主；`/api/v1/verify` 已在生产持久数据库中对过期、异常或漏收记录执行有界联网复核。
 - 本地解析支持无空格编号、全角括号、同行连续规范、版次、`RFJ`、`建标`、`DB/T` 与 `22G101-1`。
 - DeepSeek 默认模型为 `deepseek-v4-flash`；仅在 `ENABLE_REMOTE_EXTRACTION=true`、服务端 Secret 存在且本地零提取时调用。
 - 远程响应会过滤畸形编号；远程失败安全降级为空。
@@ -65,7 +65,7 @@
 - verification: `mixed`；每项按文字中的“未验证/需要”继续保守处理。
 - evidence: 数据状态统计、适配器实测、GitHub Actions 查询与前端代码审查。
 
-- 1349 条 `unknown` 仍需核验，不能无身份匹配和来源状态证据地批量转换为现行。
+- 1347 条 `unknown` 仍需核验，不能无身份匹配和来源状态证据地批量转换为现行。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 需要更多来源证据。
 - 官方来源适配器不是全部生产连通；实际未验证的来源必须继续标记未验证。
 - 远程提取开启后，本地零结果会把触发兜底的整段原始输入发送给 DeepSeek；前端尚未给出明确的用户告知，生产开启前需补足。
@@ -103,15 +103,16 @@
 
 ## 2026-09-01 漏收补查与来源链接修正
 
-- as_of: `2026-09-01T17:43:30+08:00`
-- verification: `tested_local`
-- evidence: 工标网真实搜索、内存 V2 API 流程、全量后端/前端测试、lint/build 与本地浏览器流程。
+- as_of: `2026-09-01T21:40:17+08:00`
+- verification: `production_verified`
+- evidence: 工标网真实搜索、全量测试、GitHub/Vercel 状态、公网 API/浏览器流程与 Neon 条件更新。
 
 - 工标网实时返回 `GB/T 50308-2017`、`GB 50911-2013`、`GB 50497-2019` 均为现行；本地漏收查询可将 `GB 50308-2017` 发现为 `GB/T 50308-2017`，返回“标准属性错误”并给出推荐编号。
 - 已收录但状态未知的精确记录可由工标网单源明确为 `current/single_source`，业务判定显示“完全一致”。
 - 搜建筑 `gfnr.aspx?id=...` 对外链接统一转换为 `NormContent.aspx?id=...` 全文阅读入口；搜建筑当前仍可能按 IP、会话或访问频率跳转真人验证，系统不绕过该安全控制。
-- 本地完整验证基线为后端 120 项、前端 14 项、ESLint、Vite build；浏览器两条截图用例无控制台错误。
-- 以上均为本地实现，尚未部署 `guifan.108923.xyz`；公网目前仍会重现截图中的漏收和旧文案。
+- 本地完整验证基线为后端 121 项、前端 14 项、ESLint、Vite build；生产浏览器三条截图用例无控制台错误。
+- 已部署 `guifan.108923.xyz` 并完成三条公网浏览器验收：2 条“完全一致/现行”、1 条 `GB`→`GB/T` 属性修正，未找到计数为 0。
+- 首次公网验收发现仅编号查询可能重复写入发现记录；提交 `a8ac4f9` 增加按发现后规范编号复用已有 V2 记录。生产重复记录 ID `5506` 已可恢复地标记为 `quarantined`，保留 ID `5507`；两次连续查询后总数保持 1741、公开搜索仅返回 1 条。
 
 ## 下一次任务首先复核
 
