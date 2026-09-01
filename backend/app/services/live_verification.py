@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import StandardStatus, VerificationLevel
 from app.models.models import StandardModel, StandardV2Model, StandardV2SourceModel
 from app.repositories.standard_repo import StandardRepo
+from app.repositories.standard_v2_repo import StandardV2Repo
 from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_standard_code
 from app.sources import SourceError, SourceRecord
 from app.sync.orchestrator import _upsert_source_row, build_source
@@ -232,6 +233,10 @@ def persist_discovered_standard(
     parsed = parse_standard_code(record.normalized_code)
     if parsed is None:
         return None
+    existing = StandardV2Repo.get_by_code(db, record.normalized_code)
+    if existing is not None:
+        persist_live_verification(db, existing, outcome)
+        return existing
     standard = StandardV2Model(
         code=record.normalized_code,
         normalized_code=record.normalized_code,

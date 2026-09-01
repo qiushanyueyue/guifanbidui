@@ -147,6 +147,28 @@ def test_discovered_record_is_published_into_v2_dataset():
     assert standard.data_quality_status == "publishable"
 
 
+def test_repeated_discovery_reuses_existing_v2_record():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    outcome = discover_live(
+        code="GB 50308-2017",
+        name=None,
+        factory=_factory({
+            "csres": _record(
+                "csres",
+                code="GB/T 50308-2017",
+                name="城市轨道交通工程测量规范",
+                source_url="http://www.csres.com/detail/300264.html",
+            )
+        }),
+    )
+    first = persist_discovered_standard(db, outcome, use_v2=True)
+    second = persist_discovered_standard(db, outcome, use_v2=True)
+    assert second.id == first.id
+    assert db.query(StandardV2Model).count() == 1
+
+
 def test_status_or_replacement_disagreement_is_temporarily_unconfirmed():
     status_conflict = verify_live(
         _standard(),
