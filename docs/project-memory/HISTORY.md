@@ -116,6 +116,15 @@
 - evidence: 住建部 2024 年第 61/62 号公告；工标网真实返回；Neon 条件更新；后端 126 passed；前端 14 passed、ESLint、Vite build；Vercel Ready；公网 API 和页面表格验收。
 - remaining_risk: 实际 Excel 已移到 `/Volumes/yue/Download/文档/`，仓库个别本地集成测试仍硬编码旧路径；本次通过测试插件指向实际文件完成 126 项验证，未改动该测试基础设施。
 
+## 2026-09-06 — 查新证据并发写入幂等修复
+
+- event_id: `2026-09-06-live-evidence-staging-race-fix`
+- status: `production_verified`
+- scope: staging 证据写入的并发唯一键冲突处理、公网部署与错误日志观测。
+- result: `stage_record` 在保存点内执行写入；另一请求同时创建相同证据时回退保存点并复用已有行，不回滚外层查新事务。提交 `ef323fe` 已部署；两请求并发查询均返回现行结论，部署后错误日志窗口为空。
+- evidence: 后端 127 passed；Vercel 生产 Ready；公网并发 POST 验收；`vercel logs --environment production --level error --since 2026-09-06T22:59:09+08:00 --json` 无输出。
+- remaining_risk: 历史 1 小时错误日志中保留了本次修复前的并发记录；新部署后观测窗口已清洁。
+
 ## 追加模板
 
 ```markdown

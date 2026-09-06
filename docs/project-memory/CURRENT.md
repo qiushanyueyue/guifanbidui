@@ -13,9 +13,9 @@
 - evidence: GitHub CLI/API、Vercel 部署状态、公网 `/api/health`。
 
 - GitHub 可见性：Public；证据：`gh repo view qiushanyueyue/guifanbidui --json visibility,isPrivate,url` 与匿名 GitHub API。
-- 当前生产功能提交为 `ae0d538`；Vercel 已对该提交完成生产部署。
+- 当前生产功能提交为 `ef323fe`；Vercel 已对该提交完成生产部署。
 - 生产域名：`https://guifan.108923.xyz`。
-- Vercel 主线自动部署：Ready；当日部署 `guifanbidui-lhm7rilm2-yys-projects-2b5b21c2.vercel.app`。
+- Vercel 主线自动部署：Ready；当前域名指向 `main` 最新部署，部署详情以 `vercel inspect guifan.108923.xyz` 实时复核。
 - 公网健康：`/api/health` 返回 `status=ok`、`database=ok`。
 - Vercel 对提交 `a8ac4f9` 返回 `Deployment has completed`；现有项目和域名未更换。
 
@@ -124,8 +124,9 @@
 - `GB 50009-2012` 的“2006年版”来自替代关系中的旧规范 `GB 50009-2001（2006版）`，不是当前规范版次；数据管道和读取层均禁止“修订年早于编号年”。
 - 同根因生产记录 `4095`、`5481`、`5504` 已可恢复地标记为 `quarantined`，对应正确原始版记录保留；公网重新查新后 `GB 50009-2012`、`GB 50096-2011`、`JGJ 125-2016` 均为 `current/single_source`。
 - `GB 50010-2010` 和 `GB 50011-2010` 依住建部 2024 年局部修订公告分别命中 `GB/T 50010-2010 混凝土结构设计标准（2024年版）`、`GB/T 50011-2010 建筑抗震设计标准（2024年版）`，返回标准属性修正和完整推荐引用。
-- 生产页面三条验收为 1 条“完全一致/现行”、2 条“标准属性错误/现行，需采用2024年版”、未找到 0；Vercel 生产部署 `ae0d538` 为 Ready。
-- 验证基线：后端 126 passed；前端 14 passed、ESLint、Vite build；Excel 实际路径审计 1585 行。
+- 生产页面三条验收为 1 条“完全一致/现行”、2 条“标准属性错误/现行，需采用2024年版”、未找到 0；同规范并发查询均成功。
+- 并发 staging 证据写入已在唯一键冲突时回退到保存点并复用已有记录；部署后新错误日志窗口为空。
+- 验证基线：后端 127 passed；前端 14 passed、ESLint、Vite build；Excel 实际路径审计 1585 行。
 
 ## 下一次任务首先复核
 
