@@ -1,7 +1,7 @@
 # 当前事实快照
 
-- snapshot_id: `2026-09-01-production-and-local-fix`
-- as_of: `2026-09-01T21:40:17+08:00`
+- snapshot_id: `2026-09-06-common-standard-identity-fix`
+- as_of: `2026-09-06T22:50:48+08:00`
 - verification: `production_verified`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 下列事实来自当日实际命令/API/浏览器验收；新对话必须重新核验会漂移的项目。
@@ -13,9 +13,9 @@
 - evidence: GitHub CLI/API、Vercel 部署状态、公网 `/api/health`。
 
 - GitHub 可见性：Public；证据：`gh repo view qiushanyueyue/guifanbidui --json visibility,isPrivate,url` 与匿名 GitHub API。
-- 明确查新功能生产提交为 `a8ac4f9`；远端功能分支仍为 `4556b15`，当前 HEAD/主线需实时复核。
+- 当前生产功能提交为 `ae0d538`；Vercel 已对该提交完成生产部署。
 - 生产域名：`https://guifan.108923.xyz`。
-- Vercel 主线自动部署：Ready；当日部署 `guifanbidui-dywa7lp98-yys-projects-2b5b21c2.vercel.app`。
+- Vercel 主线自动部署：Ready；当日部署 `guifanbidui-lhm7rilm2-yys-projects-2b5b21c2.vercel.app`。
 - 公网健康：`/api/health` 返回 `status=ok`、`database=ok`。
 - Vercel 对提交 `a8ac4f9` 返回 `Deployment has completed`；现有项目和域名未更换。
 
@@ -25,12 +25,12 @@
 - verification: `production_verified`
 - evidence: 公网 `/api/stats`、Neon 查询与 `artifacts/` 审计报告。
 
-- 规范总数：1741。
-- 状态：367 `current`、27 `abolished`、1347 `unknown`、0 `conflict`。
-- 数据库最近发布时间：`2026-09-01T13:37:59.240571Z`。
+- 公开规范总数：1738。
+- 状态：374 `current`、28 `abolished`、1336 `unknown`、0 `conflict`。
+- 数据库最近发布时间：`2026-09-06T07:09:56.949908Z`。
 - 公网来源健康：`samr/mohurd/openstd/soujianzhu=never`、`csres=partial`；这证明工标网仅做了部分核实，并未完成全库遍历。
 - V2 关系：32；补充规范性文件：230。
-- Excel `/Volumes/yue/Download/规范目录库20251011.xlsx` 已审计并补充候选；外部挂载路径本身不是运行时依赖。
+- Excel 当前实际路径为 `/Volumes/yue/Download/文档/规范目录库20251011.xlsx`；2026-09-06 审计 1585 行守恒。测试中原硬编码路径已过时，不得将其 `FileNotFoundError` 误报为 NAS 未挂载。
 
 证据：公网 `/api/stats`、`/api/health`、历史 Neon 查询、`artifacts/data_quality_report.json`、`artifacts/excel_catalog_audit_20251011.json`。
 
@@ -84,6 +84,7 @@
 - 引用一致性与规范状态分离：单一来源的编号、名称完整匹配即显示“完全一致”；来源缺少状态时，仅规范状态显示“暂无法确认”。
 - 前端优先输出“现行 / 现行，需采用最新修订 / 已废止 / 已被替代”；来源冲突、全部不可用、无法检索或替代矛盾统一显示“暂无法确认”。
 - 在线复核成功会追加 staging/source 证据并刷新 V2 状态缓存；失败时保留历史明确结论。
+- 同编号序号与年份下，局部修订导致 `GB`→`GB/T` 及“规范”→“标准”时，按同一规范身份命中并给出引用修正；修订年份早于规范编号年份的不可能版次不得发布或展示。
 - 日/周核实任务优先选择当前 `unknown`，分批写入 staging 后通过 V2 质量门禁发布；月度任务继续轮询已有候选，避免已核实记录失去时效复查。现有任务仍不是工标网完整目录采集，漏收由查询时发现补足；该修改尚未推送或生产实测。
 - 本地对 10 个 unknown 编号做工标网抽样：6 个取得精确记录、4 个解析失败；质量门禁通过，本地计数由 213 current / 1507 unknown 变为 214 current / 1506 unknown。5 个编号返回了独立修订版，原始无版次身份仍保守保留 unknown；后续批次会跳过已有已核实版次的编号，避免重复请求。
 
@@ -113,6 +114,18 @@
 - 本地完整验证基线为后端 121 项、前端 14 项、ESLint、Vite build；生产浏览器三条截图用例无控制台错误。
 - 已部署 `guifan.108923.xyz` 并完成三条公网浏览器验收：2 条“完全一致/现行”、1 条 `GB`→`GB/T` 属性修正，未找到计数为 0。
 - 首次公网验收发现仅编号查询可能重复写入发现记录；提交 `a8ac4f9` 增加按发现后规范编号复用已有 V2 记录。生产重复记录 ID `5506` 已可恢复地标记为 `quarantined`，保留 ID `5507`；两次连续查询后总数保持 1741、公开搜索仅返回 1 条。
+
+## 2026-09-06 常用规范身份与版次修复
+
+- as_of: `2026-09-06T22:50:48+08:00`
+- verification: `production_verified`
+- evidence: 住建部 2024 年第 61/62 号公告、工标网实时搜索、Neon 条件查询/更新、Vercel 状态、公网 API 及真实页面流程。
+
+- `GB 50009-2012` 的“2006年版”来自替代关系中的旧规范 `GB 50009-2001（2006版）`，不是当前规范版次；数据管道和读取层均禁止“修订年早于编号年”。
+- 同根因生产记录 `4095`、`5481`、`5504` 已可恢复地标记为 `quarantined`，对应正确原始版记录保留；公网重新查新后 `GB 50009-2012`、`GB 50096-2011`、`JGJ 125-2016` 均为 `current/single_source`。
+- `GB 50010-2010` 和 `GB 50011-2010` 依住建部 2024 年局部修订公告分别命中 `GB/T 50010-2010 混凝土结构设计标准（2024年版）`、`GB/T 50011-2010 建筑抗震设计标准（2024年版）`，返回标准属性修正和完整推荐引用。
+- 生产页面三条验收为 1 条“完全一致/现行”、2 条“标准属性错误/现行，需采用2024年版”、未找到 0；Vercel 生产部署 `ae0d538` 为 Ready。
+- 验证基线：后端 126 passed；前端 14 passed、ESLint、Vite build；Excel 实际路径审计 1585 行。
 
 ## 下一次任务首先复核
 

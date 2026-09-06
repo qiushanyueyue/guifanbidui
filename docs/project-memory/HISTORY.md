@@ -103,6 +103,19 @@
 - supersedes: `2026-09-01-query-time-discovery-single-source-fulltext` 的“尚未部署”状态。
 - remaining_risk: 搜建筑仍会按其风控跳转真人验证，无法由本站保证消失；生产仍有 1347 条 unknown，≥95% 明确判断率尚未整体达成。
 
+## 2026-09-06 — 常用规范身份演进与不可能版次修复
+
+- event_id: `2026-09-06-common-standard-identity-and-edition-fix`
+- status: `production_verified`
+- scope: 版次解析、V2 发布/读取、`GB`↔`GB/T` 身份命中、生产数据纠正与 Vercel 部署。
+- result:
+  - 不再把替代关系中旧规范的版次挂到当前规范；修订年早于编号年的记录不参与公开查询。
+  - 同序号、同年份的 `GB`↔`GB/T` 类型变更可命中已有当前记录，名称从“规范”改为“标准”时给出完整推荐引用。
+  - 生产三条同根因脏记录已标记 `quarantined`而未删除；保留记录经工标网重新查新后均为现行。
+  - 提交 `ae0d538` 已部署原 Vercel 项目和 `guifan.108923.xyz`，真实页面的三条截图用例均达到预期。
+- evidence: 住建部 2024 年第 61/62 号公告；工标网真实返回；Neon 条件更新；后端 126 passed；前端 14 passed、ESLint、Vite build；Vercel Ready；公网 API 和页面表格验收。
+- remaining_risk: 实际 Excel 已移到 `/Volumes/yue/Download/文档/`，仓库个别本地集成测试仍硬编码旧路径；本次通过测试插件指向实际文件完成 126 项验证，未改动该测试基础设施。
+
 ## 追加模板
 
 ```markdown
