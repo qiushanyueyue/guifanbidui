@@ -42,6 +42,39 @@ def test_staging_is_idempotent_by_source_content_hash():
     assert db.query(StagingStandardModel).count() == 1
 
 
+def test_staging_unique_key_race_recovers_existing_row(monkeypatch):
+    db = _db()
+    first, _ = stage_record(db, **_record())
+    db.autoflush = False
+    real_query = db.query
+    original_flush = db.flush
+    flush_calls = 0
+    query_calls = 0
+
+    def flush_with_unique_race(*args, **kwargs):
+        nonlocal flush_calls
+        flush_calls += 1
+        if flush_calls == 1:
+            raise __import__("sqlalchemy").exc.IntegrityError(
+                "INSERT", {}, Exception("duplicate key value")
+            )
+        return original_flush(*args, **kwargs)
+
+    def query_with_race(*entities):
+        nonlocal query_calls
+        query_calls += 1
+        query = real_query(*entities)
+        if query_calls == 1:
+            return query.filter(StagingStandardModel.id == -1)
+        return query
+
+    monkeypatch.setattr(db, "flush", flush_with_unique_race)
+    monkeypatch.setattr(db, "query", query_with_race)
+    recovered, inserted = stage_record(db, **_record())
+    assert recovered.id == first.id
+    assert inserted is False
+
+
 def test_publish_normalizes_code_and_revision_without_claiming_current():
     db = _db()
     stage_record(db, **_record())

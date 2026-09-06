@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, normalize_status
@@ -94,8 +95,23 @@ def stage_record(
         parse_status="pending",
         fetched_at=datetime.utcnow(),
     )
-    db.add(row)
-    db.flush()
+    try:
+        # A second request can pass the lookup above before the first request
+        # commits. Keep the insert inside a savepoint so the unique-key race
+        # rolls back only this evidence row, not the caller's transaction.
+        with db.begin_nested():
+            db.add(row)
+            db.flush()
+    except IntegrityError:
+        existing = (
+            db.query(StagingStandardModel)
+            .filter(StagingStandardModel.source_name == source_name)
+            .filter(StagingStandardModel.content_hash == digest)
+            .first()
+        )
+        if existing is None:
+            raise
+        return existing, False
     return row, True
 
 
