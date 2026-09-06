@@ -103,3 +103,21 @@ def test_local_amendment_is_included_in_recommended_citation():
     assert result.match_type == "revision_missing"
     assert result.recommended_citation == "《建筑设计防火规范》GB 50016-2014（2018年版+2024年局部修订）"
     assert result.message == "规范现行，但引用需采用2018年版+2024年局部修订"
+
+
+def test_impossible_pre_code_edition_is_never_recommended():
+    result = _matcher()(
+        input_code="GB 50009-2012",
+        input_name="建筑结构荷载规范",
+        standard=_standard(
+            code="GB 50009-2012",
+            normalized_code="GB 50009-2012",
+            name="建筑结构荷载规范",
+            normalized_name="建筑结构荷载规范",
+            edition="2006年版",
+            revision_year="2006",
+        ),
+    )
+
+    assert result.match_type == "exact"
+    assert result.recommended_citation == "《建筑结构荷载规范》GB 50009-2012"

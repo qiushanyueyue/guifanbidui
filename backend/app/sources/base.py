@@ -13,7 +13,7 @@ from typing import Any, Iterable
 import requests
 
 from app.models.enums import StandardStatus, normalize_status
-from app.services.standard_normalizer import normalize_standard_code, parse_edition
+from app.services.standard_normalizer import normalize_standard_code, parse_standard_edition
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,23 @@ class StandardSource:
 
     def normalize(self, record: SourceRecord) -> SourceRecord:
         record.code = record.normalized_code
-        edition = parse_edition(" ".join(filter(None, [record.edition, record.name])))
+        edition = parse_standard_edition(
+            record.code,
+            " ".join(
+                filter(
+                    None,
+                    [
+                        record.edition,
+                        f"{record.revision_year}年版" if record.revision_year else None,
+                        record.name,
+                    ],
+                )
+            ),
+        )
+        if record.revision_year and edition.revision_year is None:
+            record.edition = None
+            record.revision_year = None
+            record.amendment = None
         if not record.edition:
             record.edition = edition.edition
         if not record.revision_year:

@@ -6,6 +6,7 @@ from app.services.standard_normalizer import (
     normalize_standard_code,
     normalized_name,
     parse_edition,
+    parse_standard_edition,
     parse_standard_code,
 )
 
@@ -29,6 +30,16 @@ def test_edition_is_separate_from_base_code():
     assert result[0].base_code == "GB/T 50010-2010"
     assert result[0].edition == "2024年版"
     assert result[0].revision_year == "2024"
+
+
+def test_edition_cannot_predate_the_standard_code_year():
+    parsed = parse_standard_edition(
+        "GB 50009-2012",
+        "替代 GB 50009-2001（2006年版）",
+    )
+
+    assert parsed.edition is None
+    assert parsed.revision_year is None
 
 
 def test_edition_is_detected_after_wrapped_code_parentheses():

@@ -207,6 +207,24 @@ def parse_edition(text: str | None) -> ParsedEdition:
     return ParsedEdition(edition, revision_year, amendment)
 
 
+def parse_standard_edition(code: str | None, text: str | None) -> ParsedEdition:
+    """Parse an edition without borrowing a year from an older cited standard.
+
+    Source detail pages often mention the document they replace. A revision of
+    a standard cannot predate the year in that standard's own code, so treating
+    such a year as the current edition would create an impossible identity (for
+    example ``GB 50009-2012（2006年版）``).
+    """
+
+    edition = parse_edition(text)
+    parsed = parse_standard_code(code)
+    if not parsed or not parsed.year or not edition.revision_year:
+        return edition
+    if len(parsed.year) == 4 and int(edition.revision_year) < int(parsed.year):
+        return ParsedEdition(None, None, None)
+    return edition
+
+
 def split_standard_reference(text: str | None) -> tuple[str, ParsedStandardCode | None, ParsedEdition]:
     """Extract a best-effort name, code, and edition from one source cell."""
 

@@ -23,7 +23,7 @@ from app.models.models import (
 from app.services.standard_normalizer import (
     clean_standard_name,
     normalized_name,
-    parse_edition,
+    parse_standard_edition,
     parse_standard_code,
 )
 from app.sources.csres import has_mandatory_clause_repeal, parse_csres_replacement_text
@@ -253,8 +253,11 @@ def publish_staging(db: Session) -> PublishReport:
             _quarantine(db, row, "empty_name", "规范名称为空")
             quarantined += 1
             continue
-        edition = parse_edition(" ".join(filter(None, [row.raw_edition, row.raw_name, row.raw_text])))
-        explicit_edition = row.raw_edition or edition.edition
+        edition = parse_standard_edition(
+            parsed.normalized,
+            " ".join(filter(None, [row.raw_edition, row.raw_name, row.raw_text])),
+        )
+        explicit_edition = edition.edition
         groups.setdefault((parsed.normalized, explicit_edition), []).append((row, parsed, name, edition))
         row.parse_status = "ok"
         row.parse_error = None
@@ -286,8 +289,6 @@ def publish_staging(db: Session) -> PublishReport:
                 db.delete(stale_document)
         edition = entries[0][3]
         revision_year = edition.revision_year
-        if explicit_edition and revision_year is None:
-            revision_year = parse_edition(explicit_edition).revision_year
         status, verification, source_conflict, conflict_details = _status_decision(rows)
         quality = "needs_review" if source_conflict else "publishable"
         identity = (code, explicit_edition)

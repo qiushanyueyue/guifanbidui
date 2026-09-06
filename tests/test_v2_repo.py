@@ -92,3 +92,40 @@ def test_v2_code_search_prefers_requested_edition():
         )
     db.commit()
     assert StandardV2Repo.get_by_code(db, "GB 50016-2014（2018年版）").edition == "2018年版"
+
+
+def test_v2_code_lookup_follows_gb_to_gbt_type_change():
+    db = _db()
+    standard = StandardV2Model(
+        code="GB/T 50010-2010", normalized_code="GB/T 50010-2010", base_code="GB/T 50010-2010",
+        standard_prefix="GB/T", standard_number="50010", standard_year="2010", name="混凝土结构设计标准",
+        normalized_name="混凝土结构设计标准", edition="2024年版", revision_year="2024",
+        status="current", verification_level="single_source", revision_status="amended",
+        mandatory_clause_status="unknown", data_quality_status="publishable",
+    )
+    db.add(standard)
+    db.commit()
+
+    assert StandardV2Repo.get_by_code(db, "GB 50010-2010") == standard
+
+
+def test_v2_lookup_ignores_an_impossible_pre_code_edition():
+    db = _db()
+    original = StandardV2Model(
+        code="GB 50009-2012", normalized_code="GB 50009-2012", base_code="GB 50009-2012",
+        standard_prefix="GB", standard_number="50009", standard_year="2012", name="建筑结构荷载规范",
+        normalized_name="建筑结构荷载规范", status="current", verification_level="single_source",
+        revision_status="original", mandatory_clause_status="unknown", data_quality_status="publishable",
+    )
+    impossible = StandardV2Model(
+        code="GB 50009-2012", normalized_code="GB 50009-2012", base_code="GB 50009-2012",
+        standard_prefix="GB", standard_number="50009", standard_year="2012", name="建筑结构荷载规范",
+        normalized_name="建筑结构荷载规范", edition="2006年版", revision_year="2006",
+        status="current", verification_level="single_source", revision_status="amended",
+        mandatory_clause_status="unknown", data_quality_status="publishable",
+    )
+    db.add_all([original, impossible])
+    db.commit()
+
+    assert StandardV2Repo.get_by_code(db, "GB 50009-2012") == original
+    assert StandardV2Repo.count_by_status(db)["current"] == 1

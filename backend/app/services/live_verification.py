@@ -135,7 +135,10 @@ def _discovery_match(record: SourceRecord, *, code: str | None, name: str | None
     )
     same_name = bool(wanted_name) and normalized_name(record.name) == wanted_name
     if wanted_code:
-        return (same_code or same_family) and (not wanted_name or same_name)
+        # The exact serial/year identity remains valid when a partial revision
+        # changes GB to GB/T and renames “规范” to “标准”. The matcher
+        # reports those citation corrections after discovery.
+        return same_code or same_family
     return same_name
 
 

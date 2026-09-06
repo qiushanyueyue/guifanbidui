@@ -108,19 +108,22 @@ def test_missing_code_can_be_discovered_with_gb_t_correction():
     assert outcome.records[0].normalized_code == "GB/T 50308-2017"
 
 
-def test_missing_code_discovery_rejects_a_name_mismatch():
+def test_missing_code_discovery_accepts_name_change_with_same_serial_and_year():
     outcome = discover_live(
-        code="GB 50308-2017",
-        name="另一规范",
+        code="GB 50010-2010",
+        name="混凝土结构设计规范",
         factory=_factory({
             "csres": _record(
                 "csres",
-                code="GB/T 50308-2017",
-                name="城市轨道交通工程测量规范",
+                code="GB/T 50010-2010",
+                name="混凝土结构设计标准（2024年版）",
+                edition="2024年版",
+                revision_year="2024",
             )
         }),
     )
-    assert outcome is None
+    assert outcome is not None
+    assert outcome.records[0].normalized_code == "GB/T 50010-2010"
 
 
 def test_discovered_record_is_published_into_v2_dataset():

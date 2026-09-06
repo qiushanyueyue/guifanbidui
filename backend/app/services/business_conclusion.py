@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from app.models.enums import StandardStatus, normalize_status
+from app.services.standard_normalizer import parse_standard_code
 
 
 def revision_requirement(standard: object) -> str | None:
     edition = str(getattr(standard, "edition", "") or "").strip()
     amendment = str(getattr(standard, "amendment", "") or "").strip()
+    revision_year = str(getattr(standard, "revision_year", "") or "").strip()
+    code = str(getattr(standard, "normalized_code", "") or getattr(standard, "code", "") or "")
+    parsed = parse_standard_code(code)
+    if parsed and len(parsed.year or "") == 4 and revision_year.isdigit():
+        if int(revision_year) < int(parsed.year):
+            edition = ""
+            amendment = ""
     parts = [part for part in (edition, amendment) if part]
     return "+".join(parts) or None
 

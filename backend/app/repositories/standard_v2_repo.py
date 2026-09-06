@@ -9,14 +9,25 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, normalize_status
 from app.models.models import StandardV2Model, StandardV2SourceModel
-from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_edition
+from app.services.standard_normalizer import (
+    normalize_standard_code,
+    normalized_name,
+    parse_edition,
+    parse_standard_code,
+)
 
 
 class StandardV2Repo:
     @staticmethod
     def _published(db: Session):
         return db.query(StandardV2Model).filter(
-            StandardV2Model.data_quality_status != "quarantined"
+            StandardV2Model.data_quality_status != "quarantined",
+            or_(
+                StandardV2Model.revision_year.is_(None),
+                StandardV2Model.standard_year.is_(None),
+                func.length(StandardV2Model.standard_year) != 4,
+                StandardV2Model.revision_year >= StandardV2Model.standard_year,
+            ),
         )
 
     @classmethod
@@ -37,8 +48,29 @@ class StandardV2Repo:
             ).first()
             if requested is not None:
                 return requested
-        return (
+        exact = (
             query
+            .order_by(
+                StandardV2Model.last_verified_at.desc().nullslast(),
+                StandardV2Model.edition.desc().nullslast(),
+                StandardV2Model.id,
+            )
+            .first()
+        )
+        if exact is not None:
+            return exact
+        parsed = parse_standard_code(code)
+        if parsed is None or not parsed.year:
+            return None
+        base_prefix = parsed.prefix.replace("/T", "")
+        alternate_prefix = base_prefix if parsed.prefix.endswith("/T") else f"{base_prefix}/T"
+        return (
+            cls._published(db)
+            .filter(
+                StandardV2Model.standard_prefix == alternate_prefix,
+                StandardV2Model.standard_number == parsed.serial,
+                StandardV2Model.standard_year == parsed.year,
+            )
             .order_by(
                 StandardV2Model.last_verified_at.desc().nullslast(),
                 StandardV2Model.edition.desc().nullslast(),

@@ -151,6 +151,26 @@ def test_same_code_different_editions_remain_separate():
     assert db.query(StandardV2Model).count() == 2
 
 
+def test_replaced_standard_edition_is_not_applied_to_current_standard():
+    db = _db()
+    stage_record(
+        db,
+        **_record(
+            raw_code="GB 50009-2012",
+            raw_name="建筑结构荷载规范",
+            raw_edition=None,
+            raw_text="替代 GB 50009-2001（2006年版）",
+        ),
+    )
+
+    publish_staging(db)
+
+    row = db.query(StandardV2Model).one()
+    assert row.edition is None
+    assert row.revision_year is None
+    assert row.revision_status == "original"
+
+
 def test_numberless_method_is_published_as_normative_document():
     db = _db()
     stage_record(
