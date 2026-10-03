@@ -1,36 +1,36 @@
 # 当前事实快照
 
 - snapshot_id: `2026-10-03-first-batch-reliability`
-- as_of: `2026-10-03T18:00:07+08:00`
-- verification: `mixed`
+- as_of: `2026-10-03T18:09:54+08:00`
+- verification: `production_verified`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-10-03T18:00:07+08:00`
-- verification: `production_verified_before_release`
+- as_of: `2026-10-03T18:09:54+08:00`
+- verification: `production_verified`
 - evidence: GitHub CLI/API、Vercel CLI inspect、公网 API。
 
-- 默认分支 main 当前远端为 `fe05a8a`；本任务分支为 `codex/first-batch-reliability`，第一批代码尚待 GitHub CI 和生产部署。
-- Vercel 当前生产部署 `dpl_3696yR8JCBeBrmhiMW3rRKe6ZMsM` 为 Ready，现有域名未变。
-- GitHub main 保护当前为 false；已有同步工作流最近运行失败，不能将存在工作流表述为同步成功。
+- 第一批功能通过 [PR #1](https://github.com/qiushanyueyue/guifanbidui/pull/1) 合并，已验收功能提交为 `f393a6e`；后续仅验收文档提交以 main 为准。
+- 功能生产部署 `dpl_4v9ve9x4itjAvLvg78RjV8fMBixf` 为 Ready，Git 元数据对应 `f393a6e`，域名 `guifan.108923.xyz` 已指向该部署。后续文档部署不改变功能。
+- GitHub main 已保护：backend/frontend/postgres-smoke 必须通过且分支须最新，管理员也执行检查，禁止 force-push/删除；单人维护不要求额外审批人。已有同步工作流最近运行失败，CI 通过不表示生产同步成功。
 
 ## 数据快照
 
-- as_of: `2026-10-03T18:00:07+08:00`
+- as_of: `2026-10-03T18:09:54+08:00`
 - verification: `production_verified`
 - evidence: 公网 `/api/stats`、`/api/health` 与 GitHub run `37108632356` 的失败日志。
 
 - 公开规范总数 1743；549 current、37 abolished、1157 unknown、0 conflict。
 - 公网最近发布时间 `2026-10-03T08:09:18.070866Z`；顶层服务/数据库为 ok。
-- 官方 samr/mohurd/openstd 及 soujianzhu 的批次健康为 never；旧 health 将 csres 表示为 running，不能作为当前正在同步的证据。
+- 官方 samr/mohurd/openstd 及 soujianzhu 的批次健康为 never；新 health 将 csres 正确表示为 partial；旧 running 标签已被新证据取代。
 - 2026-10-03 日批选取 25、失败 25，均记录 ParseError；随后 rebuild 的关系质量门报告 3 invalid_relation、3 reverse_chronology，退出 2。工作流失败不是仅由抓取监控引起。
-- 本轮不写生产数据、不清理关系或重新执行生产同步。
+- 本轮不进行生产数据治理、不清理关系、不重新触发生产同步；页面验收使用现有新鲜缓存。
 
 ## 当前行为不变量
 
-- as_of: `2026-08-25T15:25:37+08:00`
+- as_of: `2026-10-03T18:09:54+08:00`
 - verification: `tested`
 - evidence: 后端契约/回归测试与当日公网抽样。
 
@@ -42,19 +42,29 @@
 
 ## 验证基线
 
-- as_of: `2026-10-03T18:00:07+08:00`
-- verification: `tested_local`
+- as_of: `2026-10-03T18:09:54+08:00`
+- verification: `tested_local_and_github_ci`
 - evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite 迁移/seed/golden。
 
 - 本轮完整后端 147 项通过；154 个既有 datetime.utcnow 弃用警告。
 - 前端 14 项、ESLint、Vite build 通过。
 - 隔离 SQLite 迁移连续两次通过；仓库 seed 的黄金案例 50/50，禁用联网复核。
 - 目录审计 8 项通过，测试使用归档 raw_value 重建临时 Excel。原 7 项 FileNotFoundError 来自过时个人路径，不是业务回归。
-- PostgreSQL CI、GitHub 发布和新生产接口尚待验证。
+- GitHub PR CI `37115122521` 与 main CI `37115279046` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移两次及 seed 黄金案例实际通过。
+
+## 2026-10-03 生产回归
+
+- verification: `production_verified`
+- evidence: Vercel deployment metadata、公网只读 API、实际浏览器提取并查新、部署限定 error/fatal 日志。
+
+- 普通搜索 `GB 50010-2010` 和 `GB/T 50010-2010` 均返回同一条 GB/T 50010-2010（2024年版）；GB 50016-2014（2018年版）仍准确命中2018版；GB 50009-2012 返回无错误版次的原始版本。
+- health 顶层 status/database=ok；data=degraded，unknown_rate=0.6638、latest_sync_failure_rate=1.0，reasons 包含 high_unknown_rate/unhealthy_latest_sync；服务与数据质量不再混淆。
+- 页面输入 GB 50009/50010/50011 三条后，完全一致 1、属性修正 2、未找到 0；两条修正仍提示采用 GB/T 与2024年版，没有把 alias 冒充完全一致。
+- 浏览器 error/warn 为0；功能部署限定的验收10分钟窗口无 error/fatal 日志，不能推广为长期无错误。
 
 ## 当前风险与未验证项
 
-- as_of: `2026-10-03T18:00:07+08:00`
+- as_of: `2026-10-03T18:09:54+08:00`
 - verification: `mixed`
 - evidence: 同步日志、公开状态数量、官方适配器代码。
 

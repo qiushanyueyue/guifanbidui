@@ -10,10 +10,10 @@
 ## 当前关键事实
 
 - 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-10-03`。
-- 发布前生产提交为 `fe05a8a`；本任务第一批可靠性优化尚待 GitHub CI/Vercel 发布验收，实时阶段见 CURRENT.md。
+- 第一批可靠性优化已通过 PR #1 合并，功能提交 `f393a6e` 已在 Vercel Ready 并完成生产 API/浏览器回归；后续文档提交以 main 为准。
 - 2026-10-03 只读生产复核：1743 条；549 current、37 abolished、1157 unknown、0 conflict。最近 CSRES 25/25 ParseError，随后关系质量门失败；不得称数据管线健康。
-- 本轮前端 14 项、lint/build 和隔离 SQLite 黄金案例 50/50 通过；完整后端基线与发布证据见 CURRENT.md。
-- 新增 data health、run-id 批次质量门、隔离 SQLite/PostgreSQL CI；只允许 GB↔GB/T 搜索别名，显式版次优先。语义见 [ADR-0004](docs/project-memory/decisions/ADR-0004-sync-health-and-ci.md)。
+- 本轮后端147项、前端14项、lint/build，隔离 SQLite/PostgreSQL 迁移与黄金案例通过；GitHub 三组 CI 全部通过，main 要求三项检查，管理员也执行。
+- 已部署 data health、run-id 批次质量门、隔离 SQLite/PostgreSQL CI；只允许 GB↔GB/T 搜索别名，显式版次优先。语义见 [ADR-0004](docs/project-memory/decisions/ADR-0004-sync-health-and-ci.md)。
 - 版次不得早于规范编号年份；同序号、同年份的 `GB`↔`GB/T` 及“规范”→“标准”作为引用身份演进命中并返回修正建议。
 - `/api/v1/verify` 对生产持久数据库中超过默认 30 天或异常的记录自动有界联网复核；其余列表搜索仍以数据库为主。
 - 官方明确状态直接定案为 `official`；官方不可用时，工标网或搜建筑单源完整匹配且明确状态形成 `single_source`，两站一致升级为 `cross_verified`。编号、名称完整匹配的引用单独显示“完全一致”，不再被未知状态降为“待核验”。
