@@ -31,7 +31,7 @@ jobs:
         run: python scripts/migrate_v2.py
       - name: Verify a conservative CSRES delta
         id: verify
-        run: python scripts/verify_v2_csres.py --run-id-file "$RUNNER_TEMP/csres-run-id" --limit 25 --unknown-only
+        run: python scripts/verify_v2_csres.py --run-id-file "$RUNNER_TEMP/csres-run-id" --limit 25 --unknown-only --resume
       - name: Publish staged evidence through the quality gate
         run: python scripts/rebuild_v2.py
       - name: Check this source batch after publication

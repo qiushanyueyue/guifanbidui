@@ -18,3 +18,5 @@ ADR 用于记录会影响后续工作的长期取舍，而不是记录每次代�
 - [`ADR-0001-filesystem-layered-memory.md`](ADR-0001-filesystem-layered-memory.md) — 使用仓库内分层文件记忆。
 - [`ADR-0002-third-party-status-evidence.md`](ADR-0002-third-party-status-evidence.md) — 已由 ADR-0003 部分取代；保留第三方证据演进历史。
 - [`ADR-0003-decisive-freshness-aware-verification.md`](ADR-0003-decisive-freshness-aware-verification.md) — 明确业务结论、新鲜期自动复核与双源交叉核验。
+- [`ADR-0004-sync-health-and-ci.md`](ADR-0004-sync-health-and-ci.md) — 来源批次质量门、服务/数据健康分离与隔离数据库 CI。
+- [`ADR-0005-csres-coverage-and-verification-rotation.md`](ADR-0005-csres-coverage-and-verification-rotation.md) — CSRES 主覆盖、其他来源分工与存量复核稳定轮转。

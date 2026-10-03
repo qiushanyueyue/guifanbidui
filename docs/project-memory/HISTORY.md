@@ -167,3 +167,13 @@
 - evidence: GitHub PR CI 37115122521/main CI 37115279046 全部通过；生产功能部署 dpl_4v9ve9x4itjAvLvg78RjV8fMBixf=Ready 且 Git 元数据对应 f393a6e。普通搜索双向GB查询和2018版、health、stats实际通过；页面三条查新1完全一致/2属性修正/0未找到，浏览器无 error/warn；部署限定10分钟窗口无error/fatal日志。
 - invalidated: 发布前“代码尚未推送/CI待验证/生产无data字段/main未保护”等阶段描述不再代表当前状态；首次CI失败通过python -m pytest修正后已实际全绿。
 - remaining: CSRES 25/25 ParseError、已有3条替代关系质量异常、1157 unknown和官方适配器未接通仍存在。未为证明监控而触发生产同步，不将监控上线称为来源故障修复。后续验收文档提交不改变本次功能。
+
+## 2026-10-03 CSRES 解析与来源复核轮转（本地/公开源验收）
+
+- as_of: `2026-10-03T18:33:48+08:00`
+- verification: `tested_local_and_live_source_reads`
+- changes: 中文 keyword 用 gb18030 字节编码，正常空页不再误报 ParseError，所有搜索字段按表头映射，详情必须与搜索实际命中编号一致；日/周 unknown 使用独立稳定编号游标，失败也推进，月度与显式核验进度隔离。CSRES 保持主覆盖和明确状态来源，搜建筑辅助，官方公告补充权威事件。
+- evidence: 侧边 GPT 两轮讨论与根因反馈；[7项公开源直连抽查](../../artifacts/csres_source_probe_20261003.json) 全通过；真实元数据 fixture；完整后端164项通过。原数据质量报告和其他用户已有文件未修改。
+- invalidated: “25/25 ParseError说明CSRES整站解析接口失效”的推断不成立；建标143和GB51400样本为正常零结果。中文请求修复后建标143仍无命中。其他23条不据此强推同一根因。
+- decision: [ADR-0005](decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。
+- remaining: 本轮GitHub CI/部署尚待验证；下一自然生产批次和历史关系原文治理未验收；官方适配器和新规范目录发现未接通。
