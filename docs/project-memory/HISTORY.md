@@ -167,3 +167,30 @@
 - evidence: GitHub PR CI 37115122521/main CI 37115279046 全部通过；生产功能部署 dpl_4v9ve9x4itjAvLvg78RjV8fMBixf=Ready 且 Git 元数据对应 f393a6e。普通搜索双向GB查询和2018版、health、stats实际通过；页面三条查新1完全一致/2属性修正/0未找到，浏览器无 error/warn；部署限定10分钟窗口无error/fatal日志。
 - invalidated: 发布前“代码尚未推送/CI待验证/生产无data字段/main未保护”等阶段描述不再代表当前状态；首次CI失败通过python -m pytest修正后已实际全绿。
 - remaining: CSRES 25/25 ParseError、已有3条替代关系质量异常、1157 unknown和官方适配器未接通仍存在。未为证明监控而触发生产同步，不将监控上线称为来源故障修复。后续验收文档提交不改变本次功能。
+
+## 2026-10-03 CSRES 解析与来源复核轮转（本地/公开源验收）
+
+- as_of: `2026-10-03T18:33:48+08:00`
+- verification: `tested_local_and_live_source_reads`
+- changes: 中文 keyword 用 gb18030 字节编码，正常空页不再误报 ParseError，所有搜索字段按表头映射，详情必须与搜索实际命中编号一致；日/周 unknown 使用独立稳定编号游标，失败也推进，月度与显式核验进度隔离。CSRES 保持主覆盖和明确状态来源，搜建筑辅助，官方公告补充权威事件。
+- evidence: 侧边 GPT 两轮讨论与根因反馈；[7项公开源直连抽查](../../artifacts/csres_source_probe_20261003.json) 全通过；真实元数据 fixture；完整后端164项通过。原数据质量报告和其他用户已有文件未修改。
+- invalidated: “25/25 ParseError说明CSRES整站解析接口失效”的推断不成立；建标143和GB51400样本为正常零结果。中文请求修复后建标143仍无命中。其他23条不据此强推同一根因。
+- decision: [ADR-0005](decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。
+- remaining: 本轮GitHub CI/部署尚待验证；下一自然生产批次和历史关系原文治理未验收；官方适配器和新规范目录发现未接通。
+
+## 2026-10-03 历史证据新鲜度修正与残余边界回归
+
+- as_of: `2026-10-03T18:45:23+08:00`
+- verification: `tested_local`
+- changes: 实际代码发现 publish_staging 把重建时间当核验时间；改用明确状态来源的真实观察时间，双源新鲜度取较早观察、官方只取官方证据。成功重新抓取相同内容与在线核验同步暂存/来源时间，历史重放或未命中不刷新。
+- evidence: 完整后端169项通过；新增未命中/失败保留历史状态与时间、双源旧证据、成功相同内容刷新、在线核验后重建不回退；详情串记录不泄漏日期/关系；自动工作流共享concurrency回归。
+- remaining: 生产下一次自然批次和原关系质量异常仍未验收。
+
+## 2026-10-03 三条生产关系原文逐条核实与解析修复
+
+- as_of: `2026-10-03T18:52:58+08:00`
+- verification: `production_readonly_and_live_source_verified; tested_local`
+- changes: 对跨分号的完整强条废止通知先作整体处理，再解析真正替代关系；修复JGJ255/JGJ116/CJJ140误指向较新通用规范的三条边，保留JGJ116替代1998版的真实关系及强条部分废止状态。
+- evidence: 三条当前CSRES公开详情与原生产保存证据一致；[原文抽查](../../artifacts/csres_relation_probe_20261003.json)全通过；[既有关系图只读重算](../../artifacts/csres_relation_reparse_20261003.json)三条假边消除，反向年代问题归零；完整后端176项通过。
+- invalidated: 前阶段“关系原文尚未核实”已被实时只读与公开源证据取代；未将代码修复冒充生产派生边已更新。
+- remaining: 生产下次自然发布实际重建及来源批次分布尚待核验；官方公告和新规范发现未接通。

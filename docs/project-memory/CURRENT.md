@@ -1,8 +1,8 @@
 # 当前事实快照
 
-- snapshot_id: `2026-10-03-first-batch-reliability`
-- as_of: `2026-10-03T18:09:54+08:00`
-- verification: `production_verified`
+- snapshot_id: `2026-10-03-csres-source-reliability`
+- as_of: `2026-10-03T18:53:52+08:00`
+- verification: `mixed_local_source_and_prior_production`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
@@ -69,7 +69,7 @@
 - evidence: 同步日志、公开状态数量、官方适配器代码。
 
 - 1157 条 unknown 仍需来源治理，不能直接转为 current。
-- 最近 CSRES 批次全失败和现有替代关系质量门异常尚未修复；新监控不会将它们伪装为健康。
+- 最近生产 CSRES 批次全失败和现有替代关系质量门异常仍是修复前生产证据；本轮已修复抽样确认的零结果误报和中文请求编码，未宣称25条均为同一根因，也未重新触发生产批量同步。
 - 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
 - 既有 datetime.utcnow 弃用警告保留，未扩大本轮为时间 API 重构。
@@ -86,3 +86,27 @@
 1. GitHub CI 与 main 当前提交、Vercel 域名对应部署。
 2. 公网普通搜索的 GB/GB-T 与版次行为、data health。
 3. 本次来源批次、替代关系异常与当前 unknown 数量。
+
+## 2026-10-03 CSRES 来源与复核调度修复
+
+- as_of: `2026-10-03T18:45:23+08:00`
+- verification: `tested_local_and_live_source_reads`
+- evidence: [公开来源7项直连抽查](../../artifacts/csres_source_probe_20261003.json)、真实元数据 fixture、来源/批次/轮转回归；部署与自然生产批次验收另行区分。
+
+- GB 50009、GB 50010→GB/T 50010（2024年版）、GB 50016（2018年版）、废止的 GB 50010-2002、中文名称查询均取得正确搜索与详情；GB 51400-2020、建标143-2010明确零结果，不再 ParseError。仅公开元数据直连读取，不修改生产数据库。
+- 建标 query 的 UTF-8 请求在 CSRES 被显示为乱码；gb18030 请求后中文正确，但抽查建标143仍未命中。响应的 GBK 解码在样本中正常，不混淆请求编码与响应解码。
+- 全字段表头映射、完整身份最低门槛、正常空页/限流/验证页区分、搜索与详情身份一致性检查已实现；单源明确状态策略保持。
+- 本轮完整后端176项通过，204个既有 datetime.utcnow 弃用警告（新增轮转测试增加调用次数）；未修改前端。
+- 日/周 unknown-only 改为独立稳定编号游标轮转，失败也推进；月度进度独立，显式核验不移动自动游标。队列减少和末尾回绕有回归覆盖。
+- CSRES 主覆盖、搜建筑辅助、官方公告权威事件补充见 [ADR-0005](decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。新规范目录发现与官方适配器仍为后续工作；本轮不接入模型；三条关系原文已由当前公开CSRES页逐条证实并修复解析，生产边仍待下次发布重建。
+
+- 证据时间修正：重建发布使用明确状态来源的真实观察时间，不再用重建时间伪造新鲜度；双源核验取两源各自最近观察中的较早时间，官方只取官方证据时间。成功重新抓取相同内容与在线复核才刷新观察时间，来源表随之同步；失败/未命中保留历史结论且不刷新核验时间。
+
+## 2026-10-03 三条强条通知误解析关系
+
+- as_of: `2026-10-03T18:52:58+08:00`
+- verification: `production_readonly_and_live_source_verified; parser_and_pipeline_tested`
+- evidence: [当前三条CSRES原文](../../artifacts/csres_relation_probe_20261003.json)、[已有生产关系图只读重算](../../artifacts/csres_relation_reparse_20261003.json)。
+- 三条源规范为 JGJ 255-2012、JGJ 116-2009、CJJ 140-2010。CSRES原文以分号连接多个通用规范后共同引出“实施之日起，相关强制性条文废止”。旧parser先切分号，丢掉含“强制性”的后段，却把前段触发规范当作整本替代，产生3条反向年代边。当前公开源与生产保存原文一致。
+- 已在切分号前移除完整条文通知；JGJ116的真正“替代JGJ116-1998”仍保留。3项原文解析和3项V2发布回归通过，强条状态仍为partially_repealed，未把规范整体改为废止。
+- 只读重算已有生产派生关系图可移除三条假边，反向年代问题归零；这是既有图重算，不是完整生产发布验收。没有手工删除生产边、修改关系质量门或重跑批量同步。现有发布流程下次重建派生边时使用修复后的parser，实际发布结果待核验。

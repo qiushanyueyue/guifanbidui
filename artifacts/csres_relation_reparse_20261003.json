@@ -1,0 +1,32 @@
+{
+  "as_of": "2026-10-03T10:51:47.973936+00:00",
+  "scope": "read-only current relation graph; reparse existing derived edges only, not a complete publish replay",
+  "database_writes": false,
+  "before": {
+    "edges": 37,
+    "reverse_chronology": 3,
+    "publishable": false
+  },
+  "after": {
+    "edges": 34,
+    "reverse_chronology": 0,
+    "publishable": true
+  },
+  "removed_derived_edges": [
+    {
+      "source_code": "JGJ 255-2012",
+      "target_code": "GB 55015-2021",
+      "relation_type": "replaces"
+    },
+    {
+      "source_code": "CJJ 140-2010",
+      "target_code": "GB 55020-2021",
+      "relation_type": "replaces"
+    },
+    {
+      "source_code": "JGJ 116-2009",
+      "target_code": "GB 55021-2021",
+      "relation_type": "replaces"
+    }
+  ]
+}

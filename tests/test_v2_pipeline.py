@@ -1,4 +1,7 @@
 import pytest
+from datetime import datetime, timedelta
+import json
+from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -8,6 +11,8 @@ from app.models.models import (
     QuarantinedStandardModel,
     StagingStandardModel,
     StandardV2Model,
+    StandardV2SourceModel,
+    StandardV2RelationModel,
 )
 from app.sync.v2_pipeline import publish_staging, stage_record
 
@@ -114,6 +119,57 @@ def test_explicit_single_third_party_status_can_publish_current(source_name):
     row = db.query(StandardV2Model).one()
     assert row.status == "current"
     assert row.verification_level == "single_source"
+
+
+@pytest.mark.parametrize('failure_status', ['not_found', 'failed'])
+def test_source_failure_does_not_replace_historical_explicit_status(failure_status):
+    db = _db()
+    evidence, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
+    old_time = datetime.utcnow() - timedelta(days=45)
+    evidence.fetched_at = old_time
+    publish_staging(db)
+    previous = db.query(StandardV2Model).one()
+    previous_identity = previous.id
+    failed, _ = stage_record(db, **_record(source_name='csres', raw_text='new search did not match', raw_status=None))
+    failed.parse_status = failure_status
+    db.commit()
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.id == previous_identity
+    assert row.status == 'current'
+    assert row.verification_level == 'single_source'
+    assert row.last_verified_at == old_time
+    assert db.query(StandardV2SourceModel).one().fetched_at == old_time
+    assert db.get(StagingStandardModel, failed.id).parse_status == failure_status
+
+
+def test_cross_verified_freshness_requires_both_status_sources_to_be_fresh():
+    db = _db()
+    old_time = datetime.utcnow() - timedelta(days=45)
+    older, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
+    older.fetched_at = old_time
+    stage_record(db, **_record(source_name='soujianzhu', raw_status='现行'))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.verification_level == 'cross_verified'
+    assert row.last_verified_at == old_time
+
+
+@pytest.mark.parametrize('code', ['JGJ 255-2012', 'JGJ 116-2009', 'CJJ 140-2010'])
+def test_real_compound_clause_notices_publish_without_false_replacements(code):
+    report = json.loads((Path(__file__).parents[1] / 'artifacts/csres_relation_probe_20261003.json').read_text())
+    record = next(item for item in report['checks'] if item['observed_code'] == code)
+    db = _db()
+    stage_record(db, **_record(source_name='csres', raw_code=code, raw_name='条文废止回归规范', raw_status='现行', raw_relation_text=record['raw_replacement_text']))
+    if record['replaces']:
+        stage_record(db, **_record(source_name='csres', raw_code=record['replaces'][0], raw_name='旧规范', raw_status='废止', raw_edition=None))
+    publish_staging(db)
+    source = db.query(StandardV2Model).filter_by(base_code=code).one()
+    assert source.status == 'current'
+    assert source.mandatory_clause_status == 'partially_repealed'
+    relations = db.query(StandardV2RelationModel).filter_by(source_standard_id=source.id).all()
+    assert [db.get(StandardV2Model, edge.target_standard_id).base_code for edge in relations] == record['replaces']
+    assert all(edge.relation_type == 'replaces' for edge in relations)
 
 
 def test_identity_agreement_plus_one_usable_status_remains_single_source():

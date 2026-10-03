@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_right
 import json
 import logging
 import os
@@ -16,8 +17,8 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.models.base import SessionLocal  # noqa: E402
 from app.models.models import StandardV2Model, StagingStandardModel, SyncCheckpointModel, SyncRunModel  # noqa: E402
-from app.services.standard_normalizer import normalize_standard_code, normalized_name  # noqa: E402
-from app.sources.base import SourceError  # noqa: E402
+from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_standard_code  # noqa: E402
+from app.sources.base import ParseError, SourceError  # noqa: E402
 from app.sources.csres import CsresSource, SEARCH_URL  # noqa: E402
 from app.sync.v2_pipeline import stage_record  # noqa: E402
 
@@ -37,10 +38,26 @@ def unresolved_unknown_codes(unknown_codes: set[str], resolved_codes: set[str]) 
     return unknown_codes - resolved_codes
 
 
+def unknown_resume_start(codes: list[str], last_code: str | None) -> int:
+    """Advance a sorted unresolved queue even when resolved rows disappear."""
+    index = bisect_right(codes, last_code) if last_code else 0
+    return index if index < len(codes) else 0
+
+
 def _best_exact(records, code: str, expected_name: str):
     exact = [row for row in records if row.normalized_code == code]
     if not exact:
-        return None
+        identity = parse_standard_code(code)
+        if identity is None or identity.prefix not in {"GB", "GB/T"} or not identity.year:
+            return None
+        exact = [
+            row for row in records
+            if (other := parse_standard_code(row.normalized_code)) is not None
+            and other.prefix == ("GB/T" if identity.prefix == "GB" else "GB")
+            and (other.serial, other.year) == (identity.serial, identity.year)
+        ]
+        if not exact:
+            return None
     non_translations = [row for row in exact if "英文版" not in row.name]
     candidates = non_translations or exact
     wanted_name = normalized_name(expected_name)
@@ -97,20 +114,24 @@ def main() -> int:
                 .all()
             }
             unresolved = unresolved_unknown_codes(unknown_codes, resolved_codes)
-            codes = [code for code in unique if code in unresolved]
+            codes = sorted(code for code in unique if code in unresolved)
         else:
             codes = list(unique)
+        checkpoint_scope = "verify_v2_unknown" if args.unknown_only else "verify_v2"
         checkpoint = (
             db.query(SyncCheckpointModel)
             .filter(SyncCheckpointModel.source_name == "csres")
-            .filter(SyncCheckpointModel.scope == "verify_v2")
+            .filter(SyncCheckpointModel.scope == checkpoint_scope)
             .first()
         )
         explicit_mode = bool(explicit_codes)
-        start = 0 if explicit_mode or args.unknown_only or not args.resume else resume_start(
-            candidate_count=len(codes),
-            checkpoint_offset=checkpoint.page_number if checkpoint else None,
-        )
+        start = 0
+        if args.resume and not explicit_mode:
+            start = (
+                unknown_resume_start(codes, checkpoint.last_record_id if checkpoint else None)
+                if args.unknown_only
+                else resume_start(candidate_count=len(codes), checkpoint_offset=checkpoint.page_number if checkpoint else None)
+            )
         selected = codes[start : start + max(1, args.limit)]
         run = SyncRunModel(
             source="csres",
@@ -133,6 +154,7 @@ def main() -> int:
             expected_name = candidate.raw_name if candidate is not None else ""
             try:
                 search_rows = adapter.search(code)
+                logging.info("CSRES search code=%s result=%s count=%s", code, "results" if search_rows else "empty", len(search_rows))
                 record = _best_exact(search_rows, code, expected_name or "")
                 if record is None:
                     failed, _ = stage_record(
@@ -153,6 +175,9 @@ def main() -> int:
                         try:
                             detail = adapter.fetch_detail(record.source_url)
                             if detail is not None:
+                                if detail.normalized_code != record.normalized_code:
+                                    logging.warning("CSRES detail result=identity_mismatch expected=%s observed=%s", record.normalized_code, detail.normalized_code)
+                                    raise ParseError("CSRES detail identity differs from search", source="csres")
                                 detail.source_status = detail.source_status or search_status
                                 if expected_name and normalized_name(detail.name) != normalized_name(expected_name):
                                     detail.name = record.name
@@ -176,9 +201,15 @@ def main() -> int:
                         sync_run_id=run.id,
                     )
                     staged.parse_status = "pending"
+                    # A successful fresh fetch may have unchanged content.
+                    # Only this verified path refreshes the observation time.
+                    staged.fetched_at = datetime.utcnow()
                     run.inserted += int(inserted)
                     run.unchanged += int(not inserted)
+                if record is None:
+                    logging.info("CSRES verification code=%s result=not_found_exact", code)
             except SourceError as exc:
+                logging.warning("CSRES verification code=%s result=%s", code, exc.category)
                 failed, _ = stage_record(
                     db,
                     source_name="csres",
@@ -191,9 +222,9 @@ def main() -> int:
                 failed.parse_status = "failed"
                 failed.parse_error = f"{exc.category}: {exc.__class__.__name__}"
                 run.failed += 1
-            if not explicit_mode and not args.unknown_only:
+            if not explicit_mode:
                 if checkpoint is None:
-                    checkpoint = SyncCheckpointModel(source_name="csres", scope="verify_v2")
+                    checkpoint = SyncCheckpointModel(source_name="csres", scope=checkpoint_scope)
                     db.add(checkpoint)
                 checkpoint.page_number = offset + 1
                 checkpoint.last_record_id = code
@@ -202,7 +233,7 @@ def main() -> int:
             db.commit()
         run.finished_at = datetime.utcnow()
         run.status = "success" if run.failed == 0 else "partial"
-        if checkpoint is not None and not explicit_mode and not args.unknown_only:
+        if checkpoint is not None and not explicit_mode:
             checkpoint.status = "complete" if start + len(selected) >= len(codes) else "running"
         db.commit()
         print(

@@ -130,7 +130,7 @@ def _document_kind(name: str) -> str:
 def _status_decision(rows: list[StagingStandardModel]) -> tuple[str, str, bool, str | None]:
     usable = {
         row.source_name: normalize_status(row.raw_status).value
-        for row in rows
+        for row in sorted(rows, key=lambda row: (row.fetched_at, row.id))
         if normalize_status(row.raw_status) != StandardStatus.UNKNOWN
     }
     official = {name: value for name, value in usable.items() if name in {"samr", "mohurd", "openstd"}}
@@ -155,6 +155,20 @@ def _status_decision(rows: list[StagingStandardModel]) -> tuple[str, str, bool, 
         # agree on status. A link or identity-only row is not status evidence.
         verification = "cross_verified" if len(usable) > 1 else "single_source"
     return next(iter(statuses)), verification, False, None
+
+
+def _status_verified_at(rows: list[StagingStandardModel], verification: str) -> datetime | None:
+    """Replaying evidence is not a new source verification."""
+    latest = {
+        row.source_name: row.fetched_at
+        for row in sorted(rows, key=lambda row: (row.fetched_at, row.id))
+        if normalize_status(row.raw_status) != StandardStatus.UNKNOWN
+        and (verification != "official" or row.source_name in {"samr", "mohurd", "openstd"})
+    }
+    if not latest:
+        return None
+    # Both sources must be fresh before cross-verified evidence is fresh.
+    return min(latest.values()) if verification == "cross_verified" else max(latest.values())
 
 
 def _code_aliases(code: str) -> set[str]:
@@ -256,7 +270,7 @@ def publish_staging(db: Session) -> PublishReport:
                 )
                 existing_document.raw_text = row.raw_text
                 existing_document.last_verified_at = (
-                    datetime.utcnow() if resolved_status != StandardStatus.UNKNOWN else None
+                    row.fetched_at if resolved_status != StandardStatus.UNKNOWN else None
                 )
                 row.parse_status = "ok"
                 row.parse_error = None
@@ -336,7 +350,7 @@ def publish_staging(db: Session) -> PublishReport:
         existing.data_quality_status = quality
         existing.first_seen_at = existing.first_seen_at or min(row.fetched_at for row in rows)
         existing.last_seen_at = max(row.fetched_at for row in rows)
-        existing.last_verified_at = datetime.utcnow() if verification != "unverified" else None
+        existing.last_verified_at = _status_verified_at(rows, verification)
         existing.published_at = datetime.utcnow() if quality == "publishable" else None
         for row in rows:
             pending_evidence.append((existing, row))
@@ -345,23 +359,25 @@ def publish_staging(db: Session) -> PublishReport:
         cross_verified += int(verification == "cross_verified")
 
     db.flush()
-    evidence_keys = set(db.query(
-        StandardV2SourceModel.standard_id,
-        StandardV2SourceModel.staging_id,
-    ).all())
+    evidence_by_key = {
+        (row.standard_id, row.staging_id): row
+        for row in db.query(StandardV2SourceModel).all()
+    }
     for standard, row in pending_evidence:
         evidence_key = (standard.id, row.id)
-        if evidence_key in evidence_keys:
+        if evidence_key in evidence_by_key:
+            evidence_by_key[evidence_key].fetched_at = row.fetched_at
             continue
-        evidence_keys.add(evidence_key)
-        db.add(StandardV2SourceModel(
+        evidence = StandardV2SourceModel(
             standard_id=standard.id,
             staging_id=row.id,
             source_name=row.source_name,
             source_url=row.source_url,
             observed_status=row.raw_status,
             fetched_at=row.fetched_at,
-        ))
+        )
+        db.add(evidence)
+        evidence_by_key[evidence_key] = evidence
 
     # Resolve directional replacement evidence only after every candidate is
     # present. Unresolved targets remain review evidence and never become
