@@ -201,6 +201,9 @@ def main() -> int:
                         sync_run_id=run.id,
                     )
                     staged.parse_status = "pending"
+                    # A successful fresh fetch may have unchanged content.
+                    # Only this verified path refreshes the observation time.
+                    staged.fetched_at = datetime.utcnow()
                     run.inserted += int(inserted)
                     run.unchanged += int(not inserted)
                 if record is None:

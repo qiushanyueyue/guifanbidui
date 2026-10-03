@@ -1,12 +1,16 @@
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from scripts import verify_v2_csres
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models.base import Base
-from app.models.models import StandardV2Model, StagingStandardModel, SyncCheckpointModel, SyncRunModel
+from app.models.models import StandardV2Model, StandardV2SourceModel, StagingStandardModel, SyncCheckpointModel, SyncRunModel
 from app.sources.base import SourceRecord
+from app.sync.v2_pipeline import publish_staging
+from app.models.enums import StandardStatus, VerificationLevel
+from app.services.live_verification import LiveVerification, persist_live_verification
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +47,8 @@ def test_scheduled_workflows_publish_v2_only():
         assert "scripts/sync_incremental.py" not in content
         assert "scripts/verify_existing.py" not in content
         assert "scripts/full_reconcile.py" not in content
+        assert "group: standards-v2-sync" in content
+        assert "cancel-in-progress: false" in content
 
     assert "--unknown-only" in contents[0]
     assert "--unknown-only" in contents[1]
@@ -104,7 +110,7 @@ def test_wrong_detail_identity_cannot_replace_search_evidence(monkeypatch):
     Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine)()
     search = SourceRecord(source_name='csres', code='GB 1-2020', name='正确规范', source_status='现行', source_url='http://www.csres.com/detail/1.html')
-    detail = SourceRecord(source_name='csres', code='GB 2-2020', name='错误规范', source_status='废止')
+    detail = SourceRecord(source_name='csres', code='GB 2-2020', name='错误规范', source_status='废止', publish_date='2020-01-01', replaces='GB 3-2010', raw_payload={'raw_replacement_text':'替代 GB 3-2010'})
     monkeypatch.setattr(verify_v2_csres, 'SessionLocal', lambda: db)
     monkeypatch.setattr(verify_v2_csres.CsresSource, 'search', lambda self, code: [search])
     monkeypatch.setattr(verify_v2_csres.CsresSource, 'fetch_detail', lambda self, url: detail)
@@ -112,3 +118,47 @@ def test_wrong_detail_identity_cannot_replace_search_evidence(monkeypatch):
     assert verify_v2_csres.main() == 0
     row = db.query(StagingStandardModel).one()
     assert (row.raw_code, row.raw_name, row.raw_status) == ('GB 1-2020', '正确规范', '现行')
+    assert row.raw_publish_date is row.raw_relation_text is None
+
+
+def test_successful_unchanged_csres_fetch_refreshes_evidence_without_duplicate(monkeypatch):
+    engine = create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    record = SourceRecord(source_name='csres', code='GB 1-2020', name='测试规范', source_status='现行')
+    monkeypatch.setattr(verify_v2_csres, 'SessionLocal', lambda: db)
+    monkeypatch.setattr(verify_v2_csres.CsresSource, 'search', lambda self, code: [record])
+    monkeypatch.setattr('sys.argv', ['verify_v2_csres', '--code', record.code])
+    assert verify_v2_csres.main() == 0
+    older = datetime.utcnow() - timedelta(days=45)
+    db.query(StagingStandardModel).one().fetched_at = older
+    publish_staging(db)
+    assert db.query(StandardV2Model).one().last_verified_at == older
+    assert verify_v2_csres.main() == 0
+    publish_staging(db)
+    staging = db.query(StagingStandardModel).one()
+    assert staging.fetched_at > older
+    assert db.query(StandardV2Model).one().last_verified_at == staging.fetched_at
+    assert db.query(StandardV2SourceModel).one().fetched_at == staging.fetched_at
+    assert db.query(SyncRunModel).order_by(SyncRunModel.id.desc()).first().unchanged == 1
+
+
+def test_repeated_live_verification_refresh_survives_rebuild():
+    engine = create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    standard = StandardV2Model(code='GB 1-2020', normalized_code='GB 1-2020', base_code='GB 1-2020', standard_prefix='GB', standard_number='1', standard_year='2020', name='测试规范', normalized_name='测试规范')
+    db.add(standard); db.commit()
+    record = SourceRecord(source_name='csres', code=standard.code, name=standard.name, source_status='现行')
+    outcome = LiveVerification(StandardStatus.CURRENT, VerificationLevel.SINGLE_SOURCE, (record,))
+    persist_live_verification(db, standard, outcome)
+    older = datetime.utcnow() - timedelta(days=45)
+    db.query(StagingStandardModel).one().fetched_at = older
+    db.query(StandardV2SourceModel).one().fetched_at = older
+    db.commit()
+    persist_live_verification(db, standard, outcome)
+    verified_at = standard.last_verified_at
+    publish_staging(db)
+    assert standard.last_verified_at == verified_at
+    assert db.query(StagingStandardModel).one().fetched_at == verified_at
+    assert db.query(StandardV2SourceModel).one().fetched_at == verified_at

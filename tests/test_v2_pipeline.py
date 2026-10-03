@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -8,6 +9,7 @@ from app.models.models import (
     QuarantinedStandardModel,
     StagingStandardModel,
     StandardV2Model,
+    StandardV2SourceModel,
 )
 from app.sync.v2_pipeline import publish_staging, stage_record
 
@@ -114,6 +116,40 @@ def test_explicit_single_third_party_status_can_publish_current(source_name):
     row = db.query(StandardV2Model).one()
     assert row.status == "current"
     assert row.verification_level == "single_source"
+
+
+@pytest.mark.parametrize('failure_status', ['not_found', 'failed'])
+def test_source_failure_does_not_replace_historical_explicit_status(failure_status):
+    db = _db()
+    evidence, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
+    old_time = datetime.utcnow() - timedelta(days=45)
+    evidence.fetched_at = old_time
+    publish_staging(db)
+    previous = db.query(StandardV2Model).one()
+    previous_identity = previous.id
+    failed, _ = stage_record(db, **_record(source_name='csres', raw_text='new search did not match', raw_status=None))
+    failed.parse_status = failure_status
+    db.commit()
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.id == previous_identity
+    assert row.status == 'current'
+    assert row.verification_level == 'single_source'
+    assert row.last_verified_at == old_time
+    assert db.query(StandardV2SourceModel).one().fetched_at == old_time
+    assert db.get(StagingStandardModel, failed.id).parse_status == failure_status
+
+
+def test_cross_verified_freshness_requires_both_status_sources_to_be_fresh():
+    db = _db()
+    old_time = datetime.utcnow() - timedelta(days=45)
+    older, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
+    older.fetched_at = old_time
+    stage_record(db, **_record(source_name='soujianzhu', raw_status='现行'))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.verification_level == 'cross_verified'
+    assert row.last_verified_at == old_time
 
 
 def test_identity_agreement_plus_one_usable_status_remains_single_source():

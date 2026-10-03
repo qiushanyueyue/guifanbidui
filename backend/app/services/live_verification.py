@@ -300,6 +300,7 @@ def persist_live_verification(db: Session, standard: object, outcome: LiveVerifi
             raw_relation_text="; ".join(filter(None, [record.replaces, record.replaced_by])) or None,
         )
         staging.parse_status = "ok"
+        staging.fetched_at = now
         exists = db.query(StandardV2SourceModel).filter_by(standard_id=standard.id, staging_id=staging.id).first()
         if exists is None:
             db.add(StandardV2SourceModel(
@@ -310,6 +311,8 @@ def persist_live_verification(db: Session, standard: object, outcome: LiveVerifi
                 observed_status=record.status.value,
                 fetched_at=now,
             ))
+        else:
+            exists.fetched_at = now
     standard.status = outcome.status.value
     standard.verification_level = outcome.verification_level.value
     standard.source_conflict = outcome.source_conflict
