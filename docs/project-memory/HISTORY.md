@@ -194,3 +194,12 @@
 - evidence: 三条当前CSRES公开详情与原生产保存证据一致；[原文抽查](../../artifacts/csres_relation_probe_20261003.json)全通过；[既有关系图只读重算](../../artifacts/csres_relation_reparse_20261003.json)三条假边消除，反向年代问题归零；完整后端176项通过。
 - invalidated: 前阶段“关系原文尚未核实”已被实时只读与公开源证据取代；未将代码修复冒充生产派生边已更新。
 - remaining: 生产下次自然发布实际重建及来源批次分布尚待核验；官方公告和新规范发现未接通。
+
+## 2026-10-03 CSRES 修复 GitHub 与 Vercel 代码上线验收
+
+- as_of: `2026-10-03T19:01:58+08:00`
+- verification: `production_code_verified; natural_sync_pending`
+- changes: PR #3合并为0b2f924，Vercel Git自动部署dpl_B3ta7CYbB993EoKib1DkNYePv2Sn=Ready，正式域名指向本次功能提交；后续仅验收文档不改变功能。
+- evidence: PR CI37117904991、分支CI37117903204、main CI37118159605三组检查全部通过；公开health/stats与GB/GB-T、显式2018版搜索回归通过，部署限定验收日志无error/fatal。完整后端176项及10项公开源核对已通过。
+- invalidated: 上线前“最新CI与Vercel待验收”阶段描述已被上述实时证据取代；生产最近失败批次和三条旧派生关系尚未被新批次重建，仍不能称数据管线健康。
+- remaining: 下一自然同步的分类分布、轮转推进和派生边重建待实测；官方公告、新规范发现未接通。不新增模型、不手工删除生产数据、不重跑批次、不覆盖用户无关改动。

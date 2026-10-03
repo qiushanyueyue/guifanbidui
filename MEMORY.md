@@ -10,7 +10,7 @@
 ## 当前关键事实
 
 - 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-10-03`。
-- 第一批可靠性优化已通过 PR #1 合并，功能提交 `f393a6e` 已在 Vercel Ready 并完成生产 API/浏览器回归；后续文档提交以 main 为准。
+- CSRES 来源修复已通过 PR #3 合并，功能提交 `0b2f924` 在 Vercel Ready，正式域名和公开 API 回归通过；PR/分支/main 三组 CI 全绿。自然生产同步与实际关系重建仍待核验，后续文档提交不改变功能。
 - 2026-10-03 只读生产复核：1743 条；549 current、37 abolished、1157 unknown、0 conflict。最近 CSRES 25/25 ParseError，随后关系质量门失败；不得称数据管线健康。
 - 第一批后端147项、前端14项、lint/build，隔离 SQLite/PostgreSQL 迁移与黄金案例通过；GitHub 三组 CI 全部通过，main 要求三项检查，管理员也执行。CSRES 修复后本地后端176项通过；本轮 CI/部署证据见 CURRENT。
 - 已部署 data health、run-id 批次质量门、隔离 SQLite/PostgreSQL CI；只允许 GB↔GB/T 搜索别名，显式版次优先。语义见 [ADR-0004](docs/project-memory/decisions/ADR-0004-sync-health-and-ci.md)。

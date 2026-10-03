@@ -1,20 +1,21 @@
 # 当前事实快照
 
-- snapshot_id: `2026-10-03-csres-source-reliability`
-- as_of: `2026-10-03T18:53:52+08:00`
-- verification: `mixed_local_source_and_prior_production`
+- snapshot_id: `2026-10-03-csres-production-code-acceptance`
+- as_of: `2026-10-03T19:01:58+08:00`
+- verification: `production_code_verified; natural_sync_pending`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-10-03T18:09:54+08:00`
-- verification: `production_verified`
-- evidence: GitHub CLI/API、Vercel CLI inspect、公网 API。
+- as_of: `2026-10-03T19:01:58+08:00`
+- verification: `production_code_verified`
+- evidence: GitHub CLI/API、Vercel deployment metadata、公网只读 API。
 
-- 第一批功能通过 [PR #1](https://github.com/qiushanyueyue/guifanbidui/pull/1) 合并，已验收功能提交为 `f393a6e`；后续仅验收文档提交以 main 为准。
-- 功能生产部署 `dpl_4v9ve9x4itjAvLvg78RjV8fMBixf` 为 Ready，Git 元数据对应 `f393a6e`，域名 `guifan.108923.xyz` 已指向该部署。后续文档部署不改变功能。
-- GitHub main 已保护：backend/frontend/postgres-smoke 必须通过且分支须最新，管理员也执行检查，禁止 force-push/删除；单人维护不要求额外审批人。已有同步工作流最近运行失败，CI 通过不表示生产同步成功。
+- CSRES 修复通过 [PR #3](https://github.com/qiushanyueyue/guifanbidui/pull/3) 合并，已验收功能提交为 `0b2f924272a940514cd623ee729258367c2c9242`；后续验收文档提交不改变功能。
+- 功能生产部署 `dpl_B3ta7CYbB993EoKib1DkNYePv2Sn` 为 Ready，Git 元数据对应上述 main 提交，域名 `guifan.108923.xyz` 已指向该部署。
+- PR CI `37117904991`、分支 CI `37117903204` 和 main CI `37118159605` 的 backend/frontend/postgres-smoke 全部通过；前端测试、lint/build、隔离数据库迁移与黄金案例均实际执行。
+- GitHub main 继续要求三项必过检查、严格最新分支和管理员约束，禁止 force-push/删除。CI 通过仍不表示下一自然生产同步成功。
 
 ## 数据快照
 
@@ -110,3 +111,14 @@
 - 三条源规范为 JGJ 255-2012、JGJ 116-2009、CJJ 140-2010。CSRES原文以分号连接多个通用规范后共同引出“实施之日起，相关强制性条文废止”。旧parser先切分号，丢掉含“强制性”的后段，却把前段触发规范当作整本替代，产生3条反向年代边。当前公开源与生产保存原文一致。
 - 已在切分号前移除完整条文通知；JGJ116的真正“替代JGJ116-1998”仍保留。3项原文解析和3项V2发布回归通过，强条状态仍为partially_repealed，未把规范整体改为废止。
 - 只读重算已有生产派生关系图可移除三条假边，反向年代问题归零；这是既有图重算，不是完整生产发布验收。没有手工删除生产边、修改关系质量门或重跑批量同步。现有发布流程下次重建派生边时使用修复后的parser，实际发布结果待核验。
+
+## 2026-10-03 CSRES 修复生产代码验收
+
+- as_of: `2026-10-03T19:01:58+08:00`
+- verification: `production_code_verified; natural_sync_pending`
+- evidence: PR #3/main CI、生产 deployment metadata、公网 `/api/health`、`/api/stats`、三项普通搜索；部署限定 error/fatal 日志。
+- 新部署公开服务 status/database=ok；数据仍为1743条、549 current、37 abolished、1157 unknown，data=degraded、最近失败率1.0。这是旧生产批次证据，未伪称本轮已恢复数据管线健康。
+- GB 50010 与 GB/T 50010 普通搜索均命中相同2024年版；GB 50016显式2018版准确命中，未引发来源抓取或生产写入。
+- 功能部署限定验收10分钟查询窗口没有 error/fatal 日志；不推广为长期无错误。
+- 下一自然日批计划为2026-10-04北京时间10:17（GitHub调度可能延迟）；待核验真实抓取分类、队列推进、派生关系重建与质量门。没有手工删除旧关系、重跑同步或降低质量门。
+- 7项公开来源搜索/详情和3条公开关系原文抽查通过，完整后端176项通过；抽样不证明全库完备。官方公告适配器和独立新规范发现仍未接通，本批无需大模型。
