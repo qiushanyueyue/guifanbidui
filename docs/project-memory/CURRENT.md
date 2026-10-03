@@ -1,38 +1,32 @@
 # 当前事实快照
 
-- snapshot_id: `2026-09-06-common-standard-identity-fix`
-- as_of: `2026-09-06T22:50:48+08:00`
-- verification: `production_verified`
+- snapshot_id: `2026-10-03-first-batch-reliability`
+- as_of: `2026-10-03T18:00:07+08:00`
+- verification: `mixed`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
-- evidence_policy: 下列事实来自当日实际命令/API/浏览器验收；新对话必须重新核验会漂移的项目。
+- evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-09-01T21:40:17+08:00`
-- verification: `production_verified`
-- evidence: GitHub CLI/API、Vercel 部署状态、公网 `/api/health`。
+- as_of: `2026-10-03T18:00:07+08:00`
+- verification: `production_verified_before_release`
+- evidence: GitHub CLI/API、Vercel CLI inspect、公网 API。
 
-- GitHub 可见性：Public；证据：`gh repo view qiushanyueyue/guifanbidui --json visibility,isPrivate,url` 与匿名 GitHub API。
-- 当前生产功能提交为 `ef323fe`；Vercel 已对该提交完成生产部署。
-- 生产域名：`https://guifan.108923.xyz`。
-- Vercel 主线自动部署：Ready；当前域名指向 `main` 最新部署，部署详情以 `vercel inspect guifan.108923.xyz` 实时复核。
-- 公网健康：`/api/health` 返回 `status=ok`、`database=ok`。
-- Vercel 对提交 `a8ac4f9` 返回 `Deployment has completed`；现有项目和域名未更换。
+- 默认分支 main 当前远端为 `fe05a8a`；本任务分支为 `codex/first-batch-reliability`，第一批代码尚待 GitHub CI 和生产部署。
+- Vercel 当前生产部署 `dpl_3696yR8JCBeBrmhiMW3rRKe6ZMsM` 为 Ready，现有域名未变。
+- GitHub main 保护当前为 false；已有同步工作流最近运行失败，不能将存在工作流表述为同步成功。
 
 ## 数据快照
 
-- as_of: `2026-09-01T21:40:17+08:00`
+- as_of: `2026-10-03T18:00:07+08:00`
 - verification: `production_verified`
-- evidence: 公网 `/api/stats`、Neon 查询与 `artifacts/` 审计报告。
+- evidence: 公网 `/api/stats`、`/api/health` 与 GitHub run `37108632356` 的失败日志。
 
-- 公开规范总数：1738。
-- 状态：374 `current`、28 `abolished`、1336 `unknown`、0 `conflict`。
-- 数据库最近发布时间：`2026-09-06T07:09:56.949908Z`。
-- 公网来源健康：`samr/mohurd/openstd/soujianzhu=never`、`csres=partial`；这证明工标网仅做了部分核实，并未完成全库遍历。
-- V2 关系：32；补充规范性文件：230。
-- Excel 当前实际路径为 `/Volumes/yue/Download/文档/规范目录库20251011.xlsx`；2026-09-06 审计 1585 行守恒。测试中原硬编码路径已过时，不得将其 `FileNotFoundError` 误报为 NAS 未挂载。
-
-证据：公网 `/api/stats`、`/api/health`、历史 Neon 查询、`artifacts/data_quality_report.json`、`artifacts/excel_catalog_audit_20251011.json`。
+- 公开规范总数 1743；549 current、37 abolished、1157 unknown、0 conflict。
+- 公网最近发布时间 `2026-10-03T08:09:18.070866Z`；顶层服务/数据库为 ok。
+- 官方 samr/mohurd/openstd 及 soujianzhu 的批次健康为 never；旧 health 将 csres 表示为 running，不能作为当前正在同步的证据。
+- 2026-10-03 日批选取 25、失败 25，均记录 ParseError；随后 rebuild 的关系质量门报告 3 invalid_relation、3 reverse_chronology，退出 2。工作流失败不是仅由抓取监控引起。
+- 本轮不写生产数据、不清理关系或重新执行生产同步。
 
 ## 当前行为不变量
 
@@ -48,89 +42,37 @@
 
 ## 验证基线
 
-- as_of: `2026-08-25T15:25:37+08:00`
-- verification: `tested`
-- evidence: pytest、Vitest、ESLint、Vite build、黄金案例与浏览器实测。
+- as_of: `2026-10-03T18:00:07+08:00`
+- verification: `tested_local`
+- evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite 迁移/seed/golden。
 
-- 后端：103 passed（含 3 项记忆合同测试）；127 个既有弃用警告。
-- 前端：11 passed；ESLint 和 Vite build 通过。
-- 黄金案例：50/50。
-- 用户真实规范说明：33/33 条提取。
-- 公网示例：7 条中 3 完全一致、2 需修改、1 废止、1 未找到。
-- 浏览器：1440×900 与 390×844 无 body 横向溢出；来源按钮 96×44；导出弹窗可访问；控制台无错误。
+- 本轮完整后端 147 项通过；154 个既有 datetime.utcnow 弃用警告。
+- 前端 14 项、ESLint、Vite build 通过。
+- 隔离 SQLite 迁移连续两次通过；仓库 seed 的黄金案例 50/50，禁用联网复核。
+- 目录审计 8 项通过，测试使用归档 raw_value 重建临时 Excel。原 7 项 FileNotFoundError 来自过时个人路径，不是业务回归。
+- PostgreSQL CI、GitHub 发布和新生产接口尚待验证。
 
 ## 当前风险与未验证项
 
-- as_of: `2026-08-25T15:25:37+08:00`
-- verification: `mixed`；每项按文字中的“未验证/需要”继续保守处理。
-- evidence: 数据状态统计、适配器实测、GitHub Actions 查询与前端代码审查。
+- as_of: `2026-10-03T18:00:07+08:00`
+- verification: `mixed`
+- evidence: 同步日志、公开状态数量、官方适配器代码。
 
-- 1347 条 `unknown` 仍需核验，不能无身份匹配和来源状态证据地批量转换为现行。
-- `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 需要更多来源证据。
-- 官方来源适配器不是全部生产连通；实际未验证的来源必须继续标记未验证。
-- 远程提取开启后，本地零结果会把触发兜底的整段原始输入发送给 DeepSeek；前端尚未给出明确的用户告知，生产开启前需补足。
-- GitHub 工作流文件存在，但 `2026-08-25` 的 `gh run list` 为空；不能据此宣称定时任务已成功运行。
-- 记忆系统已本地提交、未推送；同一工作区的新对话可恢复，公网 GitHub 干净克隆暂不可恢复。
-- 第三方页面结构会变化，适配器需要 fixture 与实际抽样共同验证。
+- 1157 条 unknown 仍需来源治理，不能直接转为 current。
+- 最近 CSRES 批次全失败和现有替代关系质量门异常尚未修复；新监控不会将它们伪装为健康。
+- 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
+- `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
+- 既有 datetime.utcnow 弃用警告保留，未扩大本轮为时间 API 重构。
 
 ## 当前查新判定策略
 
-- as_of: `2026-09-01T17:43:30+08:00`
-- verification: `tested_local`
-- evidence: `tests/test_live_verification.py`、`tests/test_resolver.py`、`tests/test_v2_pipeline.py` 与 ADR-0003。
-
-- 主查询顺序为数据库新鲜缓存 → 权威官方源 → 工标网/搜建筑精确匹配 → 历史数据库 → 用户反馈；默认新鲜期 30 天。本地未收录的单条输入也进行有界来源发现并写入缓存。
-- 官方明确状态直接定案为 `official`；工标网或搜建筑任一来源完整匹配且明确状态即可形成 `single_source` 明确结论，两站对身份、状态和替代关系一致时升级为 `cross_verified`。
-- 引用一致性与规范状态分离：单一来源的编号、名称完整匹配即显示“完全一致”；来源缺少状态时，仅规范状态显示“暂无法确认”。
-- 前端优先输出“现行 / 现行，需采用最新修订 / 已废止 / 已被替代”；来源冲突、全部不可用、无法检索或替代矛盾统一显示“暂无法确认”。
-- 在线复核成功会追加 staging/source 证据并刷新 V2 状态缓存；失败时保留历史明确结论。
-- 同编号序号与年份下，局部修订导致 `GB`→`GB/T` 及“规范”→“标准”时，按同一规范身份命中并给出引用修正；修订年份早于规范编号年份的不可能版次不得发布或展示。
-- 日/周核实任务优先选择当前 `unknown`，分批写入 staging 后通过 V2 质量门禁发布；月度任务继续轮询已有候选，避免已核实记录失去时效复查。现有任务仍不是工标网完整目录采集，漏收由查询时发现补足；该修改尚未推送或生产实测。
-- 本地对 10 个 unknown 编号做工标网抽样：6 个取得精确记录、4 个解析失败；质量门禁通过，本地计数由 213 current / 1507 unknown 变为 214 current / 1506 unknown。5 个编号返回了独立修订版，原始无版次身份仍保守保留 unknown；后续批次会跳过已有已核实版次的编号，避免重复请求。
-
-## 当前本地界面变更
-
-- as_of: `2026-08-25T20:20:34+08:00`
-- verification: `browser_verified_local`
-- evidence: 本地 API/Vite 实际流程、浏览器 DOM/尺寸检查、前端测试、lint 与 build。
-
-- 搜建筑与工标网来源按钮从 96×44 调整为桌面 84×36，统一 7px 圆角、字重、阴影与 hover/focus；移动端仍保留 44px 点击高度。
-- 提取响应中名称和编号都为空白的项会在进入结果、计数和查询前过滤；本地输入含两个空行时只生成2条有效记录。
-- “业务判定”和“规范状态”分列：完整匹配显示“完全一致”，规范状态独立显示“现行，需采用2018年版”等明确结论；异常才显示“暂无法确认”。
-- 推荐引用同时包含版次和局部修订，例如 `《建筑设计防火规范》GB 50016-2014（2018年版+2024年局部修订）`。
-- 本地浏览器实测 `GB 50016-2014` 缺版次时显示“修订版需更新 / 现行，需采用2018年版”，带 2018 年版时显示“一致”；控制台无 warning/error。
-- Android: 仓库内未发现 Gradle 或 AndroidManifest 项目，本次没有可同步的 Android 端。
-- AGY: 已按用户要求通过 AGY Skill 调用两次；项目映射修复后 AGY CLI 仍无诊断返回状态1，未修改文件，最终前端改动由主代理完成。
-
-## 2026-09-01 漏收补查与来源链接修正
-
-- as_of: `2026-09-01T21:40:17+08:00`
-- verification: `production_verified`
-- evidence: 工标网真实搜索、全量测试、GitHub/Vercel 状态、公网 API/浏览器流程与 Neon 条件更新。
-
-- 工标网实时返回 `GB/T 50308-2017`、`GB 50911-2013`、`GB 50497-2019` 均为现行；本地漏收查询可将 `GB 50308-2017` 发现为 `GB/T 50308-2017`，返回“标准属性错误”并给出推荐编号。
-- 已收录但状态未知的精确记录可由工标网单源明确为 `current/single_source`，业务判定显示“完全一致”。
-- 搜建筑 `gfnr.aspx?id=...` 对外链接统一转换为 `NormContent.aspx?id=...` 全文阅读入口；搜建筑当前仍可能按 IP、会话或访问频率跳转真人验证，系统不绕过该安全控制。
-- 本地完整验证基线为后端 121 项、前端 14 项、ESLint、Vite build；生产浏览器三条截图用例无控制台错误。
-- 已部署 `guifan.108923.xyz` 并完成三条公网浏览器验收：2 条“完全一致/现行”、1 条 `GB`→`GB/T` 属性修正，未找到计数为 0。
-- 首次公网验收发现仅编号查询可能重复写入发现记录；提交 `a8ac4f9` 增加按发现后规范编号复用已有 V2 记录。生产重复记录 ID `5506` 已可恢复地标记为 `quarantined`，保留 ID `5507`；两次连续查询后总数保持 1741、公开搜索仅返回 1 条。
-
-## 2026-09-06 常用规范身份与版次修复
-
-- as_of: `2026-09-06T22:50:48+08:00`
-- verification: `production_verified`
-- evidence: 住建部 2024 年第 61/62 号公告、工标网实时搜索、Neon 条件查询/更新、Vercel 状态、公网 API 及真实页面流程。
-
-- `GB 50009-2012` 的“2006年版”来自替代关系中的旧规范 `GB 50009-2001（2006版）`，不是当前规范版次；数据管道和读取层均禁止“修订年早于编号年”。
-- 同根因生产记录 `4095`、`5481`、`5504` 已可恢复地标记为 `quarantined`，对应正确原始版记录保留；公网重新查新后 `GB 50009-2012`、`GB 50096-2011`、`JGJ 125-2016` 均为 `current/single_source`。
-- `GB 50010-2010` 和 `GB 50011-2010` 依住建部 2024 年局部修订公告分别命中 `GB/T 50010-2010 混凝土结构设计标准（2024年版）`、`GB/T 50011-2010 建筑抗震设计标准（2024年版）`，返回标准属性修正和完整推荐引用。
-- 生产页面三条验收为 1 条“完全一致/现行”、2 条“标准属性错误/现行，需采用2024年版”、未找到 0；同规范并发查询均成功。
-- 并发 staging 证据写入已在唯一键冲突时回退到保存点并复用已有记录；部署后新错误日志窗口为空。
-- 验证基线：后端 127 passed；前端 14 passed、ESLint、Vite build；Excel 实际路径审计 1585 行。
+- 主查询顺序及隐私边界维持 ADR-0003；普通搜索只读取数据库。
+- 第一批新增共用 GB↔GB/T 身份查询，显式版次优先，引用属性修正继续由 matcher 负责。
+- 数据健康、批次失败率、CI 隔离与阈值语义见 [ADR-0004](decisions/ADR-0004-sync-health-and-ci.md)。
+- `/api/health` 原 status/database/last_sync/sources 字段保持，新 data 区分覆盖率和同步异常；不把服务可用等同于全库核验。
 
 ## 下一次任务首先复核
 
-1. `git status` 与远端分支提交。
-2. 公网 `/api/health`、`/api/stats` 和目标用户流程。
-3. 数据库数量、发布时间与自动同步最近运行。
-4. 本任务相关来源的真实可用性。
+1. GitHub CI 与 main 当前提交、Vercel 域名对应部署。
+2. 公网普通搜索的 GB/GB-T 与版次行为、data health。
+3. 本次来源批次、替代关系异常与当前 unknown 数量。

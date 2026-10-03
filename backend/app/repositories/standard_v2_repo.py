@@ -36,48 +36,41 @@ class StandardV2Repo:
 
     @classmethod
     def get_by_code(cls, db: Session, code: str) -> StandardV2Model | None:
-        normalized = normalize_standard_code(code)
-        query = cls._published(db).filter(StandardV2Model.normalized_code == normalized)
-        edition = parse_edition(code)
-        if edition.revision_year:
-            requested = query.filter(
-                or_(
-                    StandardV2Model.edition == edition.edition,
-                    StandardV2Model.revision_year == edition.revision_year,
-                )
-            ).first()
-            if requested is not None:
-                return requested
-        exact = (
-            query
-            .order_by(
-                StandardV2Model.last_verified_at.desc().nullslast(),
-                StandardV2Model.edition.desc().nullslast(),
-                StandardV2Model.id,
-            )
-            .first()
-        )
-        if exact is not None:
-            return exact
+        matches = cls._code_matches(db, code, limit=1)
+        return matches[0] if matches else None
+
+    @classmethod
+    def _code_matches(cls, db: Session, code: str, limit: int) -> list[StandardV2Model]:
+        """Share exact/GB alias ordering and edition preference across read paths."""
+        queries = [cls._published(db).filter(
+            StandardV2Model.normalized_code == normalize_standard_code(code)
+        )]
         parsed = parse_standard_code(code)
-        if parsed is None or not parsed.year:
-            return None
-        base_prefix = parsed.prefix.replace("/T", "")
-        alternate_prefix = base_prefix if parsed.prefix.endswith("/T") else f"{base_prefix}/T"
-        return (
-            cls._published(db)
-            .filter(
-                StandardV2Model.standard_prefix == alternate_prefix,
+        if parsed is not None and parsed.year and parsed.prefix in {"GB", "GB/T"}:
+            queries.append(cls._published(db).filter(
+                StandardV2Model.standard_prefix == ("GB/T" if parsed.prefix == "GB" else "GB"),
                 StandardV2Model.standard_number == parsed.serial,
                 StandardV2Model.standard_year == parsed.year,
-            )
-            .order_by(
-                StandardV2Model.last_verified_at.desc().nullslast(),
-                StandardV2Model.edition.desc().nullslast(),
-                StandardV2Model.id,
-            )
-            .first()
-        )
+            ))
+        queries = [query.order_by(
+            StandardV2Model.last_verified_at.desc().nullslast(),
+            StandardV2Model.edition.desc().nullslast(),
+            StandardV2Model.id,
+        ) for query in queries]
+        edition = parse_edition(code)
+        if edition.revision_year:
+            for query in queries:
+                requested = query.filter(or_(
+                    StandardV2Model.edition == edition.edition,
+                    StandardV2Model.revision_year == edition.revision_year,
+                )).limit(limit).all()
+                if requested:
+                    return requested
+        for query in queries:
+            matches = query.limit(limit).all()
+            if matches:
+                return matches
+        return []
 
     @classmethod
     def get_by_source_url(cls, db: Session, source_url: str) -> StandardV2Model | None:
@@ -90,24 +83,7 @@ class StandardV2Repo:
 
     @classmethod
     def search(cls, db: Session, keyword: str, limit: int = 20) -> list[StandardV2Model]:
-        code = normalize_standard_code(keyword)
-        exact_query = cls._published(db).filter(StandardV2Model.normalized_code == code)
-        edition = parse_edition(keyword)
-        if edition.revision_year:
-            edition_matches = exact_query.filter(
-                or_(
-                    StandardV2Model.edition == edition.edition,
-                    StandardV2Model.revision_year == edition.revision_year,
-                )
-            ).limit(limit).all()
-            if edition_matches:
-                return edition_matches
-        exact = (
-            exact_query
-            .order_by(StandardV2Model.last_verified_at.desc().nullslast(), StandardV2Model.id)
-            .limit(limit)
-            .all()
-        )
+        exact = cls._code_matches(db, keyword, limit)
         if exact:
             return exact
         wanted_name = normalized_name(keyword)

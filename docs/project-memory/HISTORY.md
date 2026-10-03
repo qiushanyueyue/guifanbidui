@@ -138,3 +138,14 @@
 - supersedes: 可选
 - remaining_risk: ...
 ```
+
+
+## 2026-10-03 第一批查询一致性、健康指标与 CI（本地验收）
+
+- as_of: `2026-10-03T18:00:07+08:00`
+- verification: `tested_local; production_readonly_verified`
+- changes: 普通搜索与 get_by_code 共用 GB/GB-T/版次逻辑；新增兼容 data health 和原因；同步任务发布后按本次 run-id 检查，发布失败仍检查；新增隔离数据库 CI，目录测试改用归档原始行重放。
+- evidence: 完整后端 147 项通过，前端 14 项/lint/build，SQLite 两次迁移与黄金案例 50/50；生产 1743/549/37/1157。
+- invalidated: 旧 CURRENT 的 1738/374/28/1336 数量、记忆未推送及工作流未运行描述不再代表当前状态。日批 run 37108632356 已实际运行并失败：25/25 ParseError，rebuild 的关系质量门退出 2；不能用“工作流绿色”概括该现场。
+- remaining: 第一批 GitHub CI、发布与生产回归待完成；来源解析与现有关系数据异常另行治理。本轮保留无关脏工作树。
+- decision: [ADR-0004](decisions/ADR-0004-sync-health-and-ci.md)。
