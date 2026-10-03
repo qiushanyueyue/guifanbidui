@@ -157,3 +157,13 @@
 - evidence: GitHub runs 37115002064/37115023519 的 backend collection 报 scripts 模块不存在；frontend 和 postgres-smoke 已通过。
 - changes: CI 使用 `python -m pytest`，与本地已验证入口一致，让仓库根目录加入模块路径；不跳过测试、不增加运行依赖。
 - remaining: 新提交实际 CI 待重新验证。
+
+
+## 2026-10-03 第一批 GitHub 与 Vercel 生产验收
+
+- as_of: `2026-10-03T18:09:54+08:00`
+- verification: `production_verified`
+- changes: PR #1 合并为 f393a6e；main 启用 backend/frontend/postgres-smoke 三项必过检查、严格最新分支和管理员约束。Vercel Git 自动发布，现有域名及 region 未换。
+- evidence: GitHub PR CI 37115122521/main CI 37115279046 全部通过；生产功能部署 dpl_4v9ve9x4itjAvLvg78RjV8fMBixf=Ready 且 Git 元数据对应 f393a6e。普通搜索双向GB查询和2018版、health、stats实际通过；页面三条查新1完全一致/2属性修正/0未找到，浏览器无 error/warn；部署限定10分钟窗口无error/fatal日志。
+- invalidated: 发布前“代码尚未推送/CI待验证/生产无data字段/main未保护”等阶段描述不再代表当前状态；首次CI失败通过python -m pytest修正后已实际全绿。
+- remaining: CSRES 25/25 ParseError、已有3条替代关系质量异常、1157 unknown和官方适配器未接通仍存在。未为证明监控而触发生产同步，不将监控上线称为来源故障修复。后续验收文档提交不改变本次功能。
