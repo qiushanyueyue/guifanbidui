@@ -31,6 +31,9 @@ def test_scheduled_workflows_publish_v2_only():
     for content in contents:
         assert "scripts/verify_v2_csres.py" in content
         assert "scripts/rebuild_v2.py" in content
+        assert "--run-id-file" in content
+        assert "scripts/check_sync_health.py" in content
+        assert content.index("scripts/rebuild_v2.py") < content.index("scripts/check_sync_health.py")
         assert "scripts/sync_incremental.py" not in content
         assert "scripts/verify_existing.py" not in content
         assert "scripts/full_reconcile.py" not in content

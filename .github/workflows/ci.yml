@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:///${{ github.workspace }}/ci-standards.db
+      STANDARDS_DATASET: v2
+      ENABLE_LIVE_STANDARD_REFRESH: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run backend tests
+        run: PYTHONPATH=backend python -m pytest -q tests
+      - name: Check project memory
+        run: python scripts/check_project_memory.py
+      - name: Check whitespace in submitted changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "$BASE_SHA" HEAD
+          else
+            git show --format= --check HEAD
+          fi
+      - name: SQLite migration smoke and idempotency
+        run: |
+          python scripts/migrate_v2.py
+          python scripts/migrate_v2.py
+      - name: Import reviewed seed into isolated CI database
+        run: python scripts/import_v2_seed.py
+      - name: Run golden decisions without live requests
+        run: python scripts/run_golden_cases.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Run frontend tests
+        run: npm test
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build
+
+  postgres-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-local-only
+          POSTGRES_DB: standards_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d standards_ci"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: ci
+      PGPASSWORD: ci-local-only
+      PGDATABASE: standards_ci
+      STANDARDS_DATASET: v2
+      ENABLE_LIVE_STANDARD_REFRESH: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Use isolated PostgreSQL service
+        run: echo 'DATABASE_URL=postgresql+psycopg://' >> "$GITHUB_ENV"
+      - name: PostgreSQL migration smoke and idempotency
+        run: |
+          python scripts/migrate_v2.py
+          python scripts/migrate_v2.py
+      - name: Import reviewed seed into isolated PostgreSQL
+        run: python scripts/import_v2_seed.py
+      - name: Run golden decisions on PostgreSQL
+        run: python scripts/run_golden_cases.py

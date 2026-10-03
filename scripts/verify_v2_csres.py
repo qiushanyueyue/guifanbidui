@@ -51,6 +51,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--run-id-file", type=Path, help="write this batch ID for the post-publication quality gate")
     parser.add_argument(
         "--unknown-only",
         action="store_true",
@@ -125,6 +126,8 @@ def main() -> int:
         )
         db.add(run)
         db.commit()
+        if args.run_id_file:
+            args.run_id_file.write_text(str(run.id), encoding="utf-8")
         for offset, code in enumerate(selected, start=start):
             candidate = unique.get(code)
             expected_name = candidate.raw_name if candidate is not None else ""
@@ -204,6 +207,7 @@ def main() -> int:
         db.commit()
         print(
             {
+                "run_id": run.id,
                 "selected": run.found,
                 "inserted": run.inserted,
                 "unchanged": run.unchanged,

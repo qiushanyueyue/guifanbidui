@@ -154,8 +154,19 @@ class SyncStatusResponse(BaseModel):
     latest: Optional[dict[str, Any]] = None
 
 
+class DataHealthResponse(BaseModel):
+    status: str
+    total: int = 0
+    unknown: int = 0
+    unknown_rate: float = 0.0
+    last_successful_sync: Optional[datetime] = None
+    latest_sync_failure_rate: Optional[float] = None
+    reasons: List[str] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     status: str
     database: str
     last_sync: Optional[datetime] = None
     sources: dict[str, str]
+    data: Optional[DataHealthResponse] = None

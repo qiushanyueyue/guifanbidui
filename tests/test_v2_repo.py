@@ -129,3 +129,45 @@ def test_v2_lookup_ignores_an_impossible_pre_code_edition():
 
     assert StandardV2Repo.get_by_code(db, "GB 50009-2012") == original
     assert StandardV2Repo.count_by_status(db)["current"] == 1
+
+
+def _alias_standard(prefix='GB/T', edition='2024年版', year='2010', quality='publishable'):
+    code = f'{prefix} 50010-{year}'
+    return StandardV2Model(
+        code=code, normalized_code=code, base_code=code, standard_prefix=prefix,
+        standard_number='50010', standard_year=year, name='混凝土结构设计标准',
+        normalized_name='混凝土结构设计标准', edition=edition,
+        revision_year=edition[:4] if edition else None, status='current',
+        verification_level='single_source', revision_status='amended',
+        mandatory_clause_status='unknown', data_quality_status=quality,
+    )
+
+
+def test_v2_search_and_lookup_share_bidirectional_gb_alias_and_edition_preference():
+    for prefix, requested in [('GB/T','GB'), ('GB','GB/T')]:
+        db = _db()
+        latest = _alias_standard(prefix)
+        older = _alias_standard(prefix, '2015年版')
+        db.add_all([latest,older,_alias_standard(prefix,year='2011'),
+                    _alias_standard(prefix,'2025年版',quality='quarantined')]); db.commit()
+        assert StandardV2Repo.search(db,f'{requested} 50010-2010') == [latest,older]
+        assert StandardV2Repo.search(db,f'{requested} 50010-2010（2015年版）') == [older]
+        assert StandardV2Repo.get_by_code(db,f'{requested} 50010-2010（2015年版）') == older
+
+
+def test_v2_alias_keeps_exact_identity_first_and_does_not_guess_other_prefixes():
+    db=_db(); exact=_alias_standard('GB'); alias=_alias_standard()
+    db.add_all([exact,alias,_alias_standard('JGJ/T')]); db.commit()
+    assert StandardV2Repo.search(db,'GB 50010-2010') == [exact]
+    assert StandardV2Repo.search(db,'JGJ 50010-2010') == []
+    assert StandardV2Repo.get_by_code(db,'JGJ 50010-2010') is None
+
+
+def test_v2_requested_alias_edition_precedes_exact_identity_without_that_edition():
+    db = _db()
+    exact = _alias_standard('GB', edition=None)
+    alias = _alias_standard('GB/T', edition='2015年版')
+    db.add_all([exact, alias])
+    db.commit()
+    assert StandardV2Repo.search(db, 'GB 50010-2010（2015年版）') == [alias]
+    assert StandardV2Repo.get_by_code(db, 'GB 50010-2010（2015年版）') == alias

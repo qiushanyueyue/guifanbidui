@@ -2,11 +2,32 @@ from __future__ import annotations
 
 import importlib
 import json
+
+import openpyxl
+import pytest
 from pathlib import Path
 
 
-CATALOG_PATH = Path("/Volumes/yue/Download/规范目录库20251011.xlsx")
 SEED_PATH = Path("data/standards_v2_seed.json")
+
+
+@pytest.fixture(scope="module")
+def catalog_path(tmp_path_factory):
+    """Replay archived raw Excel rows without depending on a mounted volume."""
+    audit = json.loads(Path("artifacts/excel_catalog_audit_20251011.json").read_text(encoding="utf-8"))
+    workbook = openpyxl.Workbook()
+    workbook.remove(workbook.active)
+    sheets = {}
+    for row in audit["rows"]:
+        name = row["excel_sheet"]
+        if name not in sheets:
+            sheets[name] = workbook.create_sheet(name)
+            sheets[name].cell(1, 1, "规范目录")
+        sheets[name].cell(row["excel_row"], 1, row["raw_value"])
+    path = tmp_path_factory.mktemp("catalog-fixture") / "catalog.xlsx"
+    workbook.save(path)
+    workbook.close()
+    return path
 
 
 def _audit_callable():
@@ -47,10 +68,10 @@ def _pre_merge_seed(tmp_path: Path) -> Path:
     return path
 
 
-def test_catalog_audit_conserves_all_excel_rows_and_keeps_traceability():
+def test_catalog_audit_conserves_all_excel_rows_and_keeps_traceability(catalog_path):
     audit_catalog = _audit_callable()
     assert callable(audit_catalog)
-    report = audit_catalog(CATALOG_PATH, seed_path=SEED_PATH)
+    report = audit_catalog(catalog_path, seed_path=SEED_PATH)
 
     assert report.total_rows == 1585
     assert len(report.rows) == report.total_rows
@@ -59,10 +80,10 @@ def test_catalog_audit_conserves_all_excel_rows_and_keeps_traceability():
     assert sum(report.summary[key] for key in report.CLASSIFICATIONS) == 1585
 
 
-def test_catalog_audit_normalizes_codes_and_preserves_version_semantics():
+def test_catalog_audit_normalizes_codes_and_preserves_version_semantics(catalog_path):
     audit_catalog = _audit_callable()
     assert callable(audit_catalog)
-    report = audit_catalog(CATALOG_PATH, seed_path=SEED_PATH)
+    report = audit_catalog(catalog_path, seed_path=SEED_PATH)
 
     by_code = {row.normalized_code: row for row in report.rows if row.normalized_code}
     assert by_code["GB 50016-2014"].edition == "2018年版"
@@ -74,7 +95,7 @@ def test_catalog_audit_normalizes_codes_and_preserves_version_semantics():
     assert by_code["GB 50157-2013"].classification == "existing"
 
 
-def test_catalog_audit_distinguishes_version_and_name_conflicts(tmp_path):
+def test_catalog_audit_distinguishes_version_and_name_conflicts(tmp_path, catalog_path):
     audit_catalog = _audit_callable()
     assert callable(audit_catalog)
     seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
@@ -83,7 +104,7 @@ def test_catalog_audit_distinguishes_version_and_name_conflicts(tmp_path):
     ]
     comparison_seed = tmp_path / "comparison-seed.json"
     comparison_seed.write_text(json.dumps(seed, ensure_ascii=False), encoding="utf-8")
-    report = audit_catalog(CATALOG_PATH, seed_path=comparison_seed)
+    report = audit_catalog(catalog_path, seed_path=comparison_seed)
 
     version_conflict = next(row for row in report.rows if row.excel_row == 1524)
     assert version_conflict.classification == "version_conflict"
@@ -93,10 +114,10 @@ def test_catalog_audit_distinguishes_version_and_name_conflicts(tmp_path):
     assert next(row for row in report.rows if row.excel_row == 1577).classification == "name_conflict"
 
 
-def test_excel_only_candidates_are_not_reported_as_current():
+def test_excel_only_candidates_are_not_reported_as_current(catalog_path):
     audit_catalog = _audit_callable()
     assert callable(audit_catalog)
-    report = audit_catalog(CATALOG_PATH, seed_path=SEED_PATH)
+    report = audit_catalog(catalog_path, seed_path=SEED_PATH)
 
     for row in report.rows:
         if row.classification == "missing":
@@ -208,11 +229,11 @@ def test_final_artifacts_match_seed_and_explain_the_excel_supplement_delta():
     }
 
 
-def test_unparseable_rows_are_conserved_and_document_candidates_are_traced(tmp_path):
+def test_unparseable_rows_are_conserved_and_document_candidates_are_traced(tmp_path, catalog_path):
     classify_unparseable_documents = _normative_classifier()
     assert callable(classify_unparseable_documents)
     pre_merge_seed = _pre_merge_seed(tmp_path)
-    result = classify_unparseable_documents(CATALOG_PATH, seed_path=pre_merge_seed)
+    result = classify_unparseable_documents(catalog_path, seed_path=pre_merge_seed)
 
     assert result.total_rows == 171
     assert sum(result.summary.values()) == 171
@@ -243,11 +264,11 @@ def test_unparseable_rows_are_conserved_and_document_candidates_are_traced(tmp_p
     assert by_row[435].classification == "manual_review"
 
 
-def test_staged_normative_documents_are_unknown_and_not_ordinary_standards(tmp_path):
+def test_staged_normative_documents_are_unknown_and_not_ordinary_standards(tmp_path, catalog_path):
     classify_unparseable_documents = _normative_classifier()
     assert callable(classify_unparseable_documents)
     result = classify_unparseable_documents(
-        CATALOG_PATH,
+        catalog_path,
         seed_path=_pre_merge_seed(tmp_path),
     )
 
@@ -259,7 +280,7 @@ def test_staged_normative_documents_are_unknown_and_not_ordinary_standards(tmp_p
             assert row.normalized_name
 
 
-def test_merging_normative_candidates_does_not_change_ordinary_standards(tmp_path):
+def test_merging_normative_candidates_does_not_change_ordinary_standards(tmp_path, catalog_path):
     classify_unparseable_documents = _normative_classifier()
     merge_normative_documents = _normative_merger()
     assert callable(classify_unparseable_documents)
@@ -267,7 +288,7 @@ def test_merging_normative_candidates_does_not_change_ordinary_standards(tmp_pat
     pre_merge_seed = _pre_merge_seed(tmp_path)
     payload = json.loads(pre_merge_seed.read_text(encoding="utf-8"))
     standards_before = json.dumps(payload["standards"], ensure_ascii=False, sort_keys=True)
-    result = classify_unparseable_documents(CATALOG_PATH, seed_path=pre_merge_seed)
+    result = classify_unparseable_documents(catalog_path, seed_path=pre_merge_seed)
 
     additions = merge_normative_documents(payload, result)
 

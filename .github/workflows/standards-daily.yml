@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: "17 2 * * *"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: standards-v2-sync
+  cancel-in-progress: false
+
 jobs:
   incremental-sync:
     runs-on: ubuntu-latest
@@ -23,6 +30,10 @@ jobs:
       - name: Migrate additive V2 schema
         run: python scripts/migrate_v2.py
       - name: Verify a conservative CSRES delta
-        run: python scripts/verify_v2_csres.py --limit 25 --unknown-only
+        id: verify
+        run: python scripts/verify_v2_csres.py --run-id-file "$RUNNER_TEMP/csres-run-id" --limit 25 --unknown-only
       - name: Publish staged evidence through the quality gate
         run: python scripts/rebuild_v2.py
+      - name: Check this source batch after publication
+        if: ${{ always() && steps.verify.outcome == 'success' }}
+        run: python scripts/check_sync_health.py --source csres --run-id-file "$RUNNER_TEMP/csres-run-id" --max-failure-rate 0.5

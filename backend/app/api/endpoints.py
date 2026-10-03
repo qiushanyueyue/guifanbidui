@@ -7,7 +7,7 @@ import io
 import logging
 import os
 import urllib.parse
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -26,6 +26,7 @@ from app.models.models import (
     SyncRunModel,
 )
 from app.models.schemas import (
+    DataHealthResponse,
     DetailRequest,
     ExtractionRequest,
     ExtractionResponse,
@@ -219,27 +220,60 @@ def _latest_sync(db: Session) -> SyncRunModel | None:
 
 
 def _health_payload(db: Session) -> HealthResponse:
-    database = "ok"
+    sources = {name: "never" for name in ("samr", "mohurd", "openstd", "soujianzhu", "csres")}
     try:
         db.execute(text("SELECT 1"))
-        if not database_is_configured():
-            database = "warning"
+        database = "ok" if database_is_configured() else "warning"
+        latest = _latest_sync(db)
+        for source in sources:
+            row = (db.query(SyncRunModel).filter(SyncRunModel.source == source)
+                   .order_by(SyncRunModel.started_at.desc(), SyncRunModel.id.desc()).first())
+            if row is not None:
+                sources[source] = row.status
+        # A partial batch with usable results is a successful data refresh;
+        # zero-candidate runs must not hide stale evidence.
+        successful = (db.query(SyncRunModel)
+                      .filter(SyncRunModel.finished_at.isnot(None))
+                      .filter(SyncRunModel.status.in_(["success", "partial"]))
+                      .filter(SyncRunModel.found > SyncRunModel.failed)
+                      .order_by(SyncRunModel.finished_at.desc(), SyncRunModel.id.desc()).first())
+        counts = _repo(db).count_by_status(db)
     except Exception:
-        database = "error"
-    latest = _latest_sync(db)
-    sources: dict[str, str] = {name: "never" for name in ("samr", "mohurd", "openstd", "soujianzhu", "csres")}
-    for row in db.query(SyncRunModel).order_by(SyncRunModel.finished_at.desc()).limit(20).all():
-        if row.source not in sources or sources[row.source] != "never":
-            continue
-        sources[row.source] = row.status
-    # A third-party outage is reported per-source and does not take the API
-    # down when the database itself remains healthy.
-    overall = "ok" if database == "ok" else "degraded"
+        db.rollback()
+        return HealthResponse(
+            status="degraded", database="error", sources=sources,
+            data=DataHealthResponse(status="degraded", reasons=["database_unavailable"]),
+        )
+    total = sum(counts.values())
+    unknown = counts[StandardStatus.UNKNOWN.value]
+    unknown_rate = unknown / total if total else 0.0
+    failure_rate = latest.failed / latest.found if latest and latest.found else None
+    reasons = []
+    if not total:
+        reasons.append("empty_dataset")
+    if unknown_rate > 0.05:
+        reasons.append("high_unknown_rate")
+    if counts[StandardStatus.CONFLICT.value]:
+        reasons.append("conflicting_evidence")
+    if successful is None:
+        reasons.append("no_successful_sync")
+    elif successful.finished_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc) - timedelta(days=3):
+        reasons.append("stale_sync")
+    if latest and (latest.status not in {"success", "partial"} or
+                   (not latest.found and (latest.status != "success" or latest.failed)) or
+                   (failure_rate is not None and failure_rate > 0.5)):
+        reasons.append("unhealthy_latest_sync")
     return HealthResponse(
-        status=overall,
+        status="ok" if database == "ok" else "degraded",
         database=database,
         last_sync=latest.finished_at if latest else None,
         sources=sources,
+        data=DataHealthResponse(
+            status="degraded" if reasons else "ok", total=total, unknown=unknown,
+            unknown_rate=round(unknown_rate, 4), reasons=reasons,
+            last_successful_sync=successful.finished_at if successful else None,
+            latest_sync_failure_rate=round(failure_rate, 4) if failure_rate is not None else None,
+        ),
     )
 
 
