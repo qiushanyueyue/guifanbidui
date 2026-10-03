@@ -41,6 +41,14 @@ def parse_csres_replacement_text(value: str | None) -> tuple[list[str], list[str
     raw = str(value or "").strip()
     if not raw:
         return [], []
+    # A single clause-repeal notice may list several triggering standards
+    # separated by semicolons. Remove the complete notice before splitting;
+    # otherwise its first code becomes a false whole-standard replacement.
+    raw = re.sub(
+        r"自[^。]*?实施之日起[^;；。]*?强制性[^;；。]*?(?:废止|废除|不再适用)",
+        "",
+        raw,
+    )
     # CSRES often appends notices such as "GB 550xx 实施后，相关强制性条文废止".
     # That is clause-level evidence, not a whole-standard replacement edge.
     raw = ";".join(

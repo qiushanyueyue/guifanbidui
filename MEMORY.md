@@ -12,7 +12,7 @@
 - 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-10-03`。
 - 第一批可靠性优化已通过 PR #1 合并，功能提交 `f393a6e` 已在 Vercel Ready 并完成生产 API/浏览器回归；后续文档提交以 main 为准。
 - 2026-10-03 只读生产复核：1743 条；549 current、37 abolished、1157 unknown、0 conflict。最近 CSRES 25/25 ParseError，随后关系质量门失败；不得称数据管线健康。
-- 第一批后端147项、前端14项、lint/build，隔离 SQLite/PostgreSQL 迁移与黄金案例通过；GitHub 三组 CI 全部通过，main 要求三项检查，管理员也执行。CSRES 修复后本地后端169项通过；本轮 CI/部署证据见 CURRENT。
+- 第一批后端147项、前端14项、lint/build，隔离 SQLite/PostgreSQL 迁移与黄金案例通过；GitHub 三组 CI 全部通过，main 要求三项检查，管理员也执行。CSRES 修复后本地后端176项通过；本轮 CI/部署证据见 CURRENT。
 - 已部署 data health、run-id 批次质量门、隔离 SQLite/PostgreSQL CI；只允许 GB↔GB/T 搜索别名，显式版次优先。语义见 [ADR-0004](docs/project-memory/decisions/ADR-0004-sync-health-and-ci.md)。
 - CSRES 作为主要覆盖/状态来源、搜建筑辅助、官方公告补充权威变更，见 [ADR-0005](docs/project-memory/decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。本轮修复空结果误报、中文查询编码、全字段表头映射与详情身份校验；日/周 unknown 用独立编号游标轮转，避免队首饥饿。历史证据重放不刷新核验时间，成功重新抓取才刷新。源码/真实抽查通过不等于下一次生产批次已验收。
 - 版次不得早于规范编号年份；同序号、同年份的 `GB`↔`GB/T` 及“规范”→“标准”作为引用身份演进命中并返回修正建议。
@@ -25,7 +25,7 @@
 - 生产仍有 1157 条 `unknown`；漏收补查、单源明确结论及“完全一致”已部署，正常规范明确判断率 ≥95% 仍需继续批量验收。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源核验。
 - 搜建筑和工标网属于第三方证据，正式引用应回到发布机构原文。
-- 正常 CSRES 未命中仍需其他来源补证，不得转为 current。官方适配器和新规范列表发现仍未接通；历史生产关系质量门异常尚未治理。
+- 正常 CSRES 未命中仍需其他来源补证，不得转为 current。官方适配器和新规范列表发现仍未接通；三条历史反向关系已证实为跨分号的强条废止通知误解析，parser已修复，生产派生边待下一次发布重建核验。
 - `PROJECT_HANDOFF.md` 与 `PROJECT_SUMMARY.md` 含历史架构描述，不能覆盖当前纲领和事实快照。
 
 ## 按需检索

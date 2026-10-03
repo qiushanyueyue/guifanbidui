@@ -76,6 +76,19 @@ def test_numbered_mandatory_articles_are_also_clause_level_evidence():
     assert csres_module.has_mandatory_clause_repeal(text) is True
 
 
+@pytest.mark.parametrize('text,expected_old', [
+    ('自《建筑节能与可再生能源利用通用规范》 GB 55015-2021 ;《建筑与市政工程防水通用规范》 GB 55030-2022 实施之日起，该标准相关强制性条文第4.5.1条、第3.1.6、4.6.4条同时废止', []),
+    ('自 GB 55021-2021 ; GB 55008-2021 实施之日起，该标准相关强制性条文第1.0.3、1.0.4条同时废止;替代 JGJ 116-1998', ['JGJ 116-1998']),
+    ('自《建筑给水排水与节水通用规范》 GB 55020-2021 ;《城市给水工程项目规范》 GB 55026-2022 实施之日起，该标准相关强制性条文第3.0.2、3.0.8条同时废止。', []),
+    ('替代 GB 50345-2004；自 GB 55015-2021；GB 55030-2022 实施之日起，相关强制性条文废止；被 GB 50345-2026 代替', ['GB 50345-2004']),
+])
+def test_semicolons_inside_one_clause_notice_do_not_create_replacement_edges(text, expected_old):
+    replaces, replaced_by = parse_csres_replacement_text(text)
+    assert replaces == expected_old
+    assert replaced_by == (['GB 50345-2026'] if '被 GB 50345-2026' in text else [])
+    assert csres_module.has_mandatory_clause_repeal(text)
+
+
 def test_partial_revision_notice_is_not_a_whole_standard_replacement():
     text = "《城市综合管廊工程技术标准》（GB/T 50838-2015）局部修订的条文，自2025年4月1日起实施，本标准的第3.3节同时废止"
     assert parse_csres_replacement_text(text) == ([], [])
