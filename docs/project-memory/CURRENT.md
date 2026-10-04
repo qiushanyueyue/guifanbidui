@@ -1,33 +1,32 @@
 # 当前事实快照
 
 - snapshot_id: `2026-10-04-parallel-lookup`
-- as_of: `2026-10-04T23:34:39+08:00`
-- verification: `frontend_tested; live_api_performance_measured; deployment_pending`
+- as_of: `2026-10-04T23:40:11+08:00`
+- verification: `production_code_and_browser_verified; live_api_performance_measured`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-10-03T19:01:58+08:00`
-- verification: `production_code_verified`
-- evidence: GitHub CLI/API、Vercel deployment metadata、公网只读 API。
+- as_of: `2026-10-04T23:40:11+08:00`
+- verification: `production_code_and_browser_verified`
+- evidence: GitHub CLI/API、Vercel deployment metadata、正式页面实际提取查新。
 
-- CSRES 修复通过 [PR #3](https://github.com/qiushanyueyue/guifanbidui/pull/3) 合并，已验收功能提交为 `0b2f924272a940514cd623ee729258367c2c9242`；后续验收文档提交不改变功能。
-- 功能生产部署 `dpl_B3ta7CYbB993EoKib1DkNYePv2Sn` 为 Ready，Git 元数据对应上述 main 提交，域名 `guifan.108923.xyz` 已指向该部署。
-- PR CI `37117904991`、分支 CI `37117903204` 和 main CI `37118159605` 的 backend/frontend/postgres-smoke 全部通过；前端测试、lint/build、隔离数据库迁移与黄金案例均实际执行。
-- GitHub main 继续要求三项必过检查、严格最新分支和管理员约束，禁止 force-push/删除。CI 通过仍不表示下一自然生产同步成功。
+- 批量查新加速通过 [PR #5](https://github.com/qiushanyueyue/guifanbidui/pull/5) 合并，功能提交 `de2001c0a79dd3abff203a17b3a98ca6b024650f`；后续验收文档不改变功能。
+- 生产部署 `dpl_Z2e9oHX4zbvQ8eMFv3cAK8QBRiWt` 为 Ready，Git元数据对应上述提交，正式域名 `guifan.108923.xyz` 已指向该部署。
+- PR CI `37213549069`、分支 CI `37213528679`、main CI `37213627088` 的backend/frontend/postgres-smoke全部通过；前端17项测试/lint/build以及本地五条流程实际通过。
+- main继续要求三项必过检查、严格最新分支和管理员约束，禁止force-push/删除；CI通过不表示来源批次健康。
 
 ## 数据快照
 
-- as_of: `2026-10-03T18:09:54+08:00`
-- verification: `production_verified`
-- evidence: 公网 `/api/stats`、`/api/health` 与 GitHub run `37108632356` 的失败日志。
+- as_of: `2026-10-04T23:40:11+08:00`
+- verification: `production_readonly_verified`
+- evidence: 公网 `/api/stats`、`/api/health`、GitHub日批run `37188992669`的状态（本轮未追溯失败日志根因）。
 
-- 公开规范总数 1743；549 current、37 abolished、1157 unknown、0 conflict。
-- 公网最近发布时间 `2026-10-03T08:09:18.070866Z`；顶层服务/数据库为 ok。
-- 官方 samr/mohurd/openstd 及 soujianzhu 的批次健康为 never；新 health 将 csres 正确表示为 partial；旧 running 标签已被新证据取代。
-- 2026-10-03 日批选取 25、失败 25，均记录 ParseError；随后 rebuild 的关系质量门报告 3 invalid_relation、3 reverse_chronology，退出 2。工作流失败不是仅由抓取监控引起。
-- 本轮不进行生产数据治理、不清理关系、不重新触发生产同步；页面验收使用现有新鲜缓存。
+- 公开总数1743；554 current、1 upcoming、37 abolished、1151 unknown、0 conflict，最近发布时间2026-10-04T08:29:56.144183Z。
+- status/database=ok，data=degraded，unknown_rate=0.6604、latest_sync_failure_rate=0.76，csres=partial；samr/mohurd/openstd/soujianzhu批次仍never。
+- 今日自然日批已运行且工作流仍failure，不能声称管线完全健康；旧25/25 ParseError已属于10月3日历史，生产关系重建与失败分类需要单独核验。
+- 本轮不触发批量同步或数据治理；速度抽测先确认缓存新鲜后调用verify，未为提速延长缓存或关闭联网复核。
 
 ## 当前行为不变量
 
@@ -69,8 +68,8 @@
 - verification: `mixed`
 - evidence: 同步日志、公开状态数量、官方适配器代码。
 
-- 1157 条 unknown 仍需来源治理，不能直接转为 current。
-- 最近生产 CSRES 批次全失败和现有替代关系质量门异常仍是修复前生产证据；本轮已修复抽样确认的零结果误报和中文请求编码，未宣称25条均为同一根因，也未重新触发生产批量同步。
+- 1151条unknown仍需来源治理，不能直接转为current。
+- 2026-10-04日批仍失败，公开failure_rate=0.76、csres=partial；新关系重建与具体失败分类尚未逐项核验。10月3日的25/25 ParseError为历史证据。
 - 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
 - 既有 datetime.utcnow 弃用警告保留，未扩大本轮为时间 API 重构。
@@ -132,4 +131,4 @@
 - 新增有界并发、慢条目不阻塞其余结果、整批完成等待、空行过滤、重复身份/版次、单条失败继续等行为测试。接口、缓存新鲜期、联网复核、来源判定与认证规则均未改动，未新增依赖。
 - 正式API上先确认GB50009/50010/50011为新鲜current，再用相同9次查询比较旧串行与实际新调度：25091ms→8360ms，约3倍；9项canonical_code/match_type签名一致。此单次样本不是端到端页面耗时，也不代表所有网络或过期复核。
 - 2026-10-04公开health只读观察：1743条、1151 unknown、csres=partial、最近失败率0.76；新日批已运行，工作流仍失败。此次速度任务不扩展为批次故障治理，不将新生产同步称为已完全健康。
-- 本轮GitHub CI、Vercel部署与正式页面验收待完成；部署证据随后更新。
+- 上线验收：PR #5/main CI全绿，功能部署Ready且域名对应de2001c；正式页面三条流程1完全一致/2属性修正/0未找到，无浏览器error/warn。部署限定验收10分钟查询窗口没有error/fatal日志，不推广为长期无错误。验收时间2026-10-04T23:40:11+08:00。
