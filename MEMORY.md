@@ -9,7 +9,7 @@
 
 ## 当前关键事实
 
-- 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-10-03`。
+- 生产与数据快照：见 [`docs/project-memory/CURRENT.md`](docs/project-memory/CURRENT.md)，快照日期 `2026-10-04`。
 - CSRES 来源修复已通过 PR #3 合并，功能提交 `0b2f924` 在 Vercel Ready，正式域名和公开 API 回归通过；PR/分支/main 三组 CI 全绿。自然生产同步与实际关系重建仍待核验，后续文档提交不改变功能。
 - 2026-10-04只读生产复核：1743条；554 current、1 upcoming、37 abolished、1151 unknown、0 conflict。今日CSRES批次failure_rate=0.76且工作流仍failure；不得称数据管线完全健康。
 - 第一批后端147项、前端14项、lint/build，隔离 SQLite/PostgreSQL 迁移与黄金案例通过；GitHub 三组 CI 全部通过，main 要求三项检查，管理员也执行。CSRES 修复后本地后端176项通过；本轮 CI/部署证据见 CURRENT。
