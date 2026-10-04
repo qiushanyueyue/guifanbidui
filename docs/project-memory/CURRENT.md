@@ -1,8 +1,8 @@
 # 当前事实快照
 
-- snapshot_id: `2026-10-03-csres-production-code-acceptance`
-- as_of: `2026-10-03T19:01:58+08:00`
-- verification: `production_code_verified; natural_sync_pending`
+- snapshot_id: `2026-10-04-parallel-lookup`
+- as_of: `2026-10-04T23:34:39+08:00`
+- verification: `frontend_tested; live_api_performance_measured; deployment_pending`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
@@ -122,3 +122,14 @@
 - 功能部署限定验收10分钟查询窗口没有 error/fatal 日志；不推广为长期无错误。
 - 下一自然日批计划为2026-10-04北京时间10:17（GitHub调度可能延迟）；待核验真实抓取分类、队列推进、派生关系重建与质量门。没有手工删除旧关系、重跑同步或降低质量门。
 - 7项公开来源搜索/详情和3条公开关系原文抽查通过，完整后端176项通过；抽样不证明全库完备。官方公告适配器和独立新规范发现仍未接通，本批无需大模型。
+
+## 2026-10-04 批量查新速度优化
+
+- as_of: `2026-10-04T23:34:39+08:00`
+- verification: `frontend_tested_and_local_browser_verified; live_api_performance_measured`
+- evidence: [正式API速度抽测](../../artifacts/lookup_speed_probe_20261004.json)、前端17项测试、ESLint/TypeScript/Vite build、本地五条规范实际流程。
+- 根因是App.checkStandards在for循环里逐条await；改成最多4个worker，某条完成即更新原行，并立即取下一条。单条错误由既有checkStandard捕获，不中断其余行；重复编号/不同版次仍使用独立行身份。
+- 新增有界并发、慢条目不阻塞其余结果、整批完成等待、空行过滤、重复身份/版次、单条失败继续等行为测试。接口、缓存新鲜期、联网复核、来源判定与认证规则均未改动，未新增依赖。
+- 正式API上先确认GB50009/50010/50011为新鲜current，再用相同9次查询比较旧串行与实际新调度：25091ms→8360ms，约3倍；9项canonical_code/match_type签名一致。此单次样本不是端到端页面耗时，也不代表所有网络或过期复核。
+- 2026-10-04公开health只读观察：1743条、1151 unknown、csres=partial、最近失败率0.76；新日批已运行，工作流仍失败。此次速度任务不扩展为批次故障治理，不将新生产同步称为已完全健康。
+- 本轮GitHub CI、Vercel部署与正式页面验收待完成；部署证据随后更新。
