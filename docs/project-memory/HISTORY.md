@@ -211,3 +211,12 @@
 - changes: 修复页面逐条await导致后续请求等待，批量提取查新/重新查新改为最多4条并发，完成一条即填充对应行。来源、新鲜期与业务判定规则不变。
 - evidence: 前端17项行为/原界面测试、lint/build通过；本地五条流程完成3完全一致/2属性修正/0未找到。正式API同一9次新鲜缓存查询串行25091ms、并发8360ms，结果签名一致，约3倍；这是调度/API抽测，不是全场景页面延迟保证。
 - remaining: 本轮最新CI、上线与正式页面待验收；自然日批已运行但仍失败，后续来源治理单独处理。
+
+## 2026-10-04 并发查新 GitHub/Vercel 与正式页面验收
+
+- as_of: `2026-10-04T23:40:11+08:00`
+- verification: `production_code_and_browser_verified`
+- changes: PR #5合并为de2001c，Vercel Git自动部署dpl_Z2e9oHX4zbvQ8eMFv3cAK8QBRiWt=Ready，正式域名对应本次功能；仅验收文档不改变功能。
+- evidence: PR/分支/main CI37213549069/37213528679/37213627088三组检查全绿；正式页面提取GB50009/50010/50011并查新得到1完全一致/2属性修正/0未找到，浏览器error/warn为0，部署限定验收10分钟窗口无error/fatal日志。9次缓存API样本25091ms→8360ms，不外推为全场景速度保证。
+- invalidated: 本轮“CI与上线待验收”已被实际证据取代；旧10月3日25/25失败与1157unknown不再是当前快照。今日只读公开快照554current/1upcoming/37abolished/1151unknown，来源批次失败率0.76、任务仍failure。
+- remaining: 过期联网核验耗时仍受外部来源影响；自然批次失败和关系图实际重建另行核验，本次不扩大治理范围。
