@@ -3,6 +3,7 @@ import { api, type StandardInfo, type SearchResult, type Stats } from './api';
 import { InputSection } from './components/InputSection';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ExportModal } from './components/ExportModal';
+import { checkStandardsConcurrently } from './utils/checkStandards';
 import './App.css';
 
 function App() {
@@ -64,11 +65,9 @@ function App() {
   }, []);
 
   const checkStandards = useCallback(async (items: StandardInfo[]) => {
-    for (const std of items) {
-      if (std.code || std.name) {
-        await checkStandard(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std));
-      }
-    }
+    await checkStandardsConcurrently(items, std =>
+      checkStandard(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std)),
+    );
   }, [checkStandard, getResultKey]);
 
   useEffect(() => {

@@ -1,0 +1,123 @@
+{
+  "as_of": "2026-10-04T15:31:19.868Z",
+  "scope": "public warm-cache verify API; 9 lookups across 3 prechecked fresh codes; sequential vs actual frontend 4-worker scheduler",
+  "sequential": {
+    "elapsed_ms": 25091,
+    "rows": [
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 2506
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2837
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2809
+      },
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 2508
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2741
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2806
+      },
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 3020
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2942
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2921
+      }
+    ]
+  },
+  "concurrent": {
+    "elapsed_ms": 8360,
+    "rows": [
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 2673
+      },
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 2693
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 3971
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 4010
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2800
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2843
+      },
+      {
+        "input_code": "GB 50009-2012",
+        "canonical_code": "GB 50009-2012",
+        "match_type": "exact",
+        "elapsed_ms": 2472
+      },
+      {
+        "input_code": "GB 50010-2010",
+        "canonical_code": "GB/T 50010-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 4015
+      },
+      {
+        "input_code": "GB 50011-2010",
+        "canonical_code": "GB/T 50011-2010",
+        "match_type": "code_type_mismatch",
+        "elapsed_ms": 2867
+      }
+    ]
+  },
+  "speedup": 3
+}
