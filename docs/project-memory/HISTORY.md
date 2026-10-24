@@ -249,3 +249,26 @@
 - evidence: 后端全量201项通过（新增7项）。本地服务对真实 CSRES（同一批此前全部 `budget_exhausted` 的记录）：GB 50016-2014（2018年版）3.0s exact、GB 50010-2010 1.9s 修正为 GB/T、GB 50099-2011 1.4s exact，均为 `found`/single_source 且刷新核验时间；重复查询8ms。
 - supersedes: 同日“审查后续”条目中“8秒预算内均为 budget_exhausted”的发现已由本次修复处理。
 - remaining_risk: 未部署、生产未验证；搜索页没有替代关系，查询时复核不刷新替代关系；搜建筑在验证页期间不能提供证据，交叉核验仍然很少。
+
+## 2026-10-24 Claude 修复审查与公开历史凭据风险
+
+- event_id: `2026-10-24-claude-review-security-audit`
+- status: reviewed
+- scope: PR #7/#8 代码、GitHub/CI/Vercel 状态、正式域名、当前工作树、全部可达 Git blob 与提交消息。
+- result: 两个 PR 已推送且 CI/Vercel preview 通过，均未合并；正式域名仍运行 `main` 的 `1f367a2`，公开 `/api/sync/status` 仍返回 `error_message`，因此新代码没有上线。当前代码与本次提交未检出密钥，但公共 Git 历史中的 `backend/ocr_standards.py` 仍保留一处硬编码 DeepSeek 风格密钥候选，必须按泄露处理。
+- evidence: 后端 201 项、前端 18 项、ESLint、Vite build 通过；main 为 `1f367a2`，PR #7 为 `7cc9696`、PR #8 为 `fd51ead`，均 open/mergeable，CI 与 Vercel preview 成功；正式域名可访问且数据快照更新，但接口字段证明代码仍是旧版。736 个可达 Git blob 中仅上述历史候选命中；当前树无候选，GitHub Secret Scanning 关闭。
+- finding: 负缓存持久化顺序有缺陷：来源返回结果但 `persist_live_verification` 抛错时，`attempt_outcome` 仍记录 `found`，后续查询在 24 小时内跳过联网而状态保持 unknown。另有预算非严格墙钟上限及负缓存表无过期清理两个残留风险。
+- remaining: 先轮换可能暴露的凭据并受控清理公共 Git 历史；修复负缓存写入语义和表清理后再合并/部署 PR 堆栈。未执行外部账号修改、历史重写、合并或生产部署。
+
+## 2026-10-24 PR #7/#8 合并与正式域名部署验收
+
+- event_id: `2026-10-24-review-deployment`
+- status: deployed_and_production_verified
+- scope: PR #7/#8 合入、最终 main CI、Vercel 生产部署、正式域名 API 验收、当前版本公网敏感文件探测。
+- changes: PR #7 合并为 `c6ae788ae44b4c9a5e8632a1d8c23eba8b660501`；PR #8 同步最新 main 后 8 项 CI/Vercel 检查全绿并合并，最终 main 为 `6e535f9defee4a476387b5eacbdb26595fa67e8b`。合并提交 Vercel 生产状态为 success，正式域名已运行新代码。
+- evidence: 最终 main push CI `40108281983` 的 backend/frontend/postgres-smoke 全通过。正式域名 `/`、`/api/health`、`/api/stats`、`/api/sync/status`、`/api/v1/verify` 均返回 HTTP 200；首页 0.63s，health 3.18s，stats 1.66s，sync status 1.43s，verify 1.87s。`/api/sync/status` 不再包含 `error_message`，证明 PR #8 接口加固生效。
+- production_snapshot: 总数 1779；1036 current、16 upcoming、137 abolished、590 unknown、0 conflict；status/database=ok，data=degraded、unknown_rate=0.3316、latest_sync_failure_rate=0.0；最近同步 id=62，csres success，found/inserted 25/25。
+- verify_probe: `GB 50016-2014` 返回 canonical/name `GB 50016-2014`/`建筑设计防火规范`，status=current、match_type=revision_missing、confidence=0.95、verification_level=single_source，提示“规范现行，但引用需采用2018年版”，来源记录 5 条。
+- security_probe: 正式域名对 `.env`、`.env.production`、`.git/config`、`backend/.env`、`backend/.env.local` 均返回 404；当前 `origin/main` 未检出常见密钥模式。公开 Git 历史中的旧 DeepSeek 风格密钥候选仍未被历史重写清除，不能把当前树清洁表述为历史已安全。
+- supersedes: 同日审查条目中“两个 PR 均未合并、正式域名仍运行旧版、未执行生产部署”的阶段状态；同日数据快照的 1743/554/1151 已被本次 1779/1036/590 只读观察取代。
+- remaining_risk: 已部署代码仍有负缓存误记 `found`、`live_lookup_attempts` 无过期清理、8 秒预算非严格墙钟上限三项残留；数据健康仍为 degraded；历史凭据需先在提供方轮换，再受控清理所有分支历史。
