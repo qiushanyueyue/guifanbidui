@@ -13,7 +13,7 @@ from app.models.base import Base
 from app.models.enums import StandardStatus, VerificationLevel
 from app.models.models import LiveLookupAttemptModel, StandardV2Model
 from app.models.schemas import VerifyRequest
-from app.services.live_verification import LiveVerification, attempt_outcome, verify_live
+from app.services.live_verification import LiveVerification, attempt_outcome, record_attempt, verify_live
 from app.sources.base import HttpSource, RequestTimeout, SourceRecord
 
 
@@ -92,6 +92,37 @@ def _db():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)()
+
+
+def test_recording_attempt_sweeps_expired_rows(monkeypatch):
+    monkeypatch.setenv("LIVE_LOOKUP_RETRY_HOURS", "24")
+    db = _db()
+    now = datetime(2026, 10, 24, 12, 0, 0)
+    db.add_all(
+        [
+            LiveLookupAttemptModel(
+                lookup_key="code:GB 10000-2020",
+                attempted_at=now - timedelta(hours=25),
+                outcome="miss",
+            ),
+            LiveLookupAttemptModel(
+                lookup_key="code:GB 10001-2020",
+                attempted_at=now - timedelta(hours=1),
+                outcome="miss",
+            ),
+        ]
+    )
+    db.commit()
+
+    record_attempt(db, "code:GB 10002-2020", "budget_exhausted", now=now)
+
+    attempts = {
+        attempt.lookup_key: attempt
+        for attempt in db.query(LiveLookupAttemptModel).all()
+    }
+    assert "code:GB 10000-2020" not in attempts
+    assert attempts["code:GB 10001-2020"].outcome == "miss"
+    assert attempts["code:GB 10002-2020"].outcome == "budget_exhausted"
 
 
 def _unknown_standard() -> StandardV2Model:
@@ -183,6 +214,63 @@ def test_successful_discovery_is_persisted_and_recorded(monkeypatch, live_enable
 
     assert response.status == StandardStatus.CURRENT
     assert db.query(LiveLookupAttemptModel).one().outcome == "found"
+
+
+def test_refresh_persistence_failure_is_not_negative_cached(monkeypatch, live_enabled):
+    db = _db()
+    db.add(_unknown_standard())
+    db.commit()
+    calls = []
+    outcome = LiveVerification(StandardStatus.CURRENT, VerificationLevel.SINGLE_SOURCE, ())
+
+    def fake_verify_live(*_args, **_kwargs):
+        calls.append(1)
+        return outcome
+
+    def fail_persist(*_args, **_kwargs):
+        raise RuntimeError("simulated persistence failure")
+
+    monkeypatch.setattr(endpoints, "verify_live", fake_verify_live)
+    monkeypatch.setattr(endpoints, "persist_live_verification", fail_persist)
+    request = VerifyRequest(code="GB 50016-2014", name="建筑设计防火规范")
+
+    assert endpoints.verify_standard(request, db).status == StandardStatus.UNKNOWN
+    assert endpoints.verify_standard(request, db).status == StandardStatus.UNKNOWN
+
+    assert len(calls) == 2
+    assert db.query(LiveLookupAttemptModel).count() == 0
+
+
+def test_discovery_persistence_failure_is_not_negative_cached(monkeypatch, live_enabled):
+    db = _db()
+    db.add(_unknown_standard())
+    db.commit()
+    calls = []
+    record = SourceRecord(
+        source_name="csres",
+        code="GB 50308-2017",
+        name="城市轨道交通工程测量规范",
+        source_status="现行",
+        source_url="http://www.csres.com/detail/300264.html",
+    )
+    outcome = LiveVerification(StandardStatus.CURRENT, VerificationLevel.SINGLE_SOURCE, (record,))
+
+    def fake_discover_live(**_kwargs):
+        calls.append(1)
+        return outcome
+
+    def fail_persist(*_args, **_kwargs):
+        raise RuntimeError("simulated persistence failure")
+
+    monkeypatch.setattr(endpoints, "discover_live", fake_discover_live)
+    monkeypatch.setattr(endpoints, "persist_discovered_standard", fail_persist)
+    request = VerifyRequest(code="GB 50308-2017")
+
+    assert endpoints.verify_standard(request, db).match_type == "not_found"
+    assert endpoints.verify_standard(request, db).match_type == "not_found"
+
+    assert len(calls) == 2
+    assert db.query(LiveLookupAttemptModel).count() == 0
 
 
 class PagedSource:

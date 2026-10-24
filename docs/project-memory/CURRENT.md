@@ -41,13 +41,23 @@
 - 2026-10-24 PR #8（`fd51ead`，已随 `main@6e535f9` 部署）：匹配先核编号族/名称身份再给状态；公开 `/api/sync/status` 不含 `error_message`；搜索转义 LIKE 通配符；前端不再用无判定的模糊搜索兜底 verify 未找到。正式 `/api/sync/status` 已实测不含该字段。
 - 2026-10-24 PR #7/#8（已部署）：`/api/v1/verify` 每次请求共享默认8秒联网预算且查询时不重试；`live_lookup_attempts` 负缓存使同一编号/名称24小时内不重复联网，不刷新核验时间；前端20秒请求超时并丢弃过期轮次结果。见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
 
+## 2026-10-24 负缓存一致性与清理修正
+
+- as_of: `2026-10-24T23:55:00+08:00`
+- verification: `tested_not_deployed`
+- evidence: 后端全量`204 passed`；隔离 SQLite 迁移两次；旧表缺索引升级路径实测补齐索引。
+
+- 查询时发现或复核得到来源结果后，只有该结果成功写入持久数据库才记录 `found`。持久化抛错或返回空结果时，本轮不写尝试记录，下一请求可以重试。
+- 每次记录尝试时，在同一事务内删除早于 `LIVE_LOOKUP_RETRY_HOURS` 窗口的旧行；`attempted_at` 新增索引，迁移脚本可对已有表补建。
+- 当前生产仍运行 `main@3643871` 的负缓存行为；上述修正只在工作区通过测试，尚未推送或部署。
+
 ## 验证基线
 
 - as_of: `2026-10-24T23:45:47+08:00`
 - verification: `tested_local_and_github_ci`
 - evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite/PostgreSQL、最终 main CI。
 
-- 本轮完整后端 201 项通过，前端 18 项、ESLint、Vite build 通过。
+- 2026-10-24 负缓存修正后完整后端 204 项通过；此前前端 18 项、ESLint、Vite build 通过，本轮未改前端。
 - 隔离 SQLite 迁移连续两次通过；仓库 seed 的黄金案例 50/50，禁用联网复核。
 - 目录审计 8 项通过，测试使用归档 raw_value 重建临时 Excel。原 7 项 FileNotFoundError 来自过时个人路径，不是业务回归。
 - 最终 main CI `40108281983` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移与 smoke 实际通过。
@@ -73,7 +83,7 @@
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
 - 2026-10-24：查询时联网预算与负缓存已随 PR #7/#8 部署；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
 - 2026-10-24实测：CSRES 详情页单次12–20秒、搜索页约3秒。查询时复核已部署为搜索页优先、有剩余预算才查详情页，同批记录1.4–3.0秒完成；搜建筑“真人验证”页按自动化取证不可用处理。人工可在浏览器处理验证，但当前服务端不会复用该人工浏览器会话，因此该来源本次不贡献证据，也不会阻断数据库查询或其他来源比对。
-- 2026-10-24代码审查残留：查询预算不是严格的墙钟总时限；`live_lookup_attempts` 没有过期行清理，公共输入可使表持续增长；联网来源成功但持久化失败时仍会记录 `found`，同一编号随后在重试窗口内不再联网。
+- 2026-10-24代码审查残留：查询预算不是严格的墙钟总时限。负缓存误记 `found` 与尝试表过期清理已在工作区修复并通过测试，部署前生产仍有旧行为。
 
 ## 2026-10-24 公开历史凭据风险
 

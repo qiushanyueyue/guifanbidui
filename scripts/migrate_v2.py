@@ -17,6 +17,8 @@ import app.models.models  # noqa: E402,F401
 
 def main() -> None:
     Base.metadata.create_all(bind=engine)
+    for index in app.models.models.LiveLookupAttemptModel.__table__.indexes:
+        index.create(bind=engine, checkfirst=True)
     columns = {column["name"] for column in inspect(engine).get_columns("sync_runs")}
     additions = {
         "mode": "VARCHAR(32) NOT NULL DEFAULT 'incremental'",
