@@ -229,3 +229,13 @@
 - result: 每次 verify 共享默认8秒总预算（`LIVE_LOOKUP_BUDGET_SECONDS`），查询时适配器不重试，预算耗尽不再发请求；同一编号/名称在 `LIVE_LOOKUP_RETRY_HOURS`（默认24小时）内不重复联网，负缓存不改 `last_verified_at` 与状态证据。前端统一20秒超时（导出60秒），新一轮提取/查新/清空会取消旧请求并丢弃迟到结果。决策见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
 - evidence: 后端全量184项通过（新增8项），隔离SQLite迁移两次、seed导入1738条、黄金案例50/50；前端18项测试、ESLint、Vite build通过。本地服务对真实CSRES：GB 50038-2005 unknown首次复核0.67s升为current/single_source，重复查询8ms；漏收编号 GB 59999-2021 首次0.96s记为miss，重复查询6ms未联网。本地浏览器提取三条规范流程正常，无控制台错误；本地缓存请求毫秒级完成，浏览器中未能观察到取消中途请求，该行为由代码与单测覆盖。
 - remaining_risk: 未提交、未部署，生产未验证；预算耗尽的真实比例、交叉核验比例变化和生产函数时限待上线后观察。
+
+## 2026-10-24 审查后续：匹配判定、接口安全、查询次数与仓库清理
+
+- event_id: `2026-10-24-review-followups`
+- status: tested
+- scope: 匹配判定、前端查新兜底、限流、公开同步状态、LIKE 搜索、负缓存容错、V2 结果查询、联网结果合并、`datetime.utcnow` 替换与调试文件清理。基于未合并的 PR #7 分支。
+- result: 匹配先核身份再给状态：编号族不同或仅名称输入但名称不同时，返回 `code_mismatch`/`name_mismatch`，不再把模糊命中的另一条规范的废止/替代状态报给引用。前端不再在 verify 未找到后用无判定的模糊搜索结果兜底（服务端 verify 已按名称查过）。公开 `/api/sync/status` 不再返回 `error_message`。搜索对 `%`、`_`、`\` 转义。Vercel 上限流按平台写入的 `x-real-ip`/`x-forwarded-for` 计数，其他环境忽略这两个头，空闲 IP 按窗口清理；限流仍是单实例内存级。`live_lookup_attempts` 表缺失时查询降级为不使用负缓存。数据集选择每请求只探测一次，替代关系改为单次 join。新增 `app/timeutil.utc_now` 替换全部 `datetime.utcnow`。删除17个无引用的调试/复现/截图文件，保留 `test_connection.html`（启动说明引用）和旧数据脚本。
+- evidence: 后端全量194项通过且0条警告（此前205条）；隔离 SQLite 迁移两次、seed 1738条、黄金案例50/50；前端18项、ESLint、Vite build 通过。本地浏览器三条规范：GB 50016 完全一致（需2018年版）、GB 50010 属性修正为 GB/T、GB 50099-2011 配错名称返回名称错误。
+- finding: 本地对 seed 记录的查询时复核三条均为 `budget_exhausted`。直测 CSRES 详情页单次12–20秒、搜索页约3秒；已存详情 URL 时复核走详情页，8秒预算内无法完成（旧代码重试4次同样失败）。搜建筑详情页返回“真人验证”页，被解析为无效记录后因身份不符被忽略。
+- remaining_risk: 未提交、未部署。查询时是否改为搜索页优先、预算是否放宽，待产品决定；搜建筑验证页应识别为来源不可用（不得绕过）。健康检查 5% unknown 阈值未改。

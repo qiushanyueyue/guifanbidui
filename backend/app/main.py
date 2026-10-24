@@ -20,11 +20,32 @@ logger = logging.getLogger(__name__)
 class InMemoryRateLimitMiddleware:
     """Small process-local guard; deployment-level throttling remains upstream."""
 
-    def __init__(self, app, limit: int = 120, window_seconds: int = 60):
+    def __init__(self, app, limit: int = 120, window_seconds: int = 60, trust_proxy_ip: bool = False):
         self.app = app
         self.limit = max(1, limit)
         self.window_seconds = max(1, window_seconds)
+        # Only trust client-IP headers when the platform overwrites them (Vercel).
+        self.trust_proxy_ip = trust_proxy_ip
         self.events: dict[str, deque[float]] = defaultdict(deque)
+        self._last_sweep = time.monotonic()
+
+    def _client_key(self, scope) -> str:
+        if self.trust_proxy_ip:
+            headers = dict(scope.get("headers") or [])
+            for name in (b"x-real-ip", b"x-forwarded-for"):
+                value = headers.get(name, b"").decode("latin-1").split(",")[0].strip()
+                if value:
+                    return value
+        client = scope.get("client")
+        return client[0] if client else "unknown"
+
+    def _sweep(self, now: float) -> None:
+        # Drop idle clients so a long-lived instance does not grow without bound.
+        if now - self._last_sweep < self.window_seconds:
+            return
+        self._last_sweep = now
+        for key in [key for key, events in self.events.items() if not events or now - events[-1] > self.window_seconds]:
+            del self.events[key]
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
@@ -35,9 +56,9 @@ class InMemoryRateLimitMiddleware:
         if path.endswith("/health") or path.endswith("/cron/health"):
             await self.app(scope, receive, send)
             return
-        client = scope.get("client")
-        key = client[0] if client else "unknown"
+        key = self._client_key(scope)
         now = time.monotonic()
+        self._sweep(now)
         events = self.events[key]
         while events and now - events[0] > self.window_seconds:
             events.popleft()
@@ -71,6 +92,7 @@ app.add_middleware(
     InMemoryRateLimitMiddleware,
     limit=int(os.getenv("RATE_LIMIT_PER_MINUTE", "120")),
     window_seconds=60,
+    trust_proxy_ip=bool(os.getenv("VERCEL")),
 )
 app.include_router(router, prefix="/api")
 

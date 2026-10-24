@@ -13,7 +13,6 @@ import os
 import re
 import sys
 import threading
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -36,6 +35,7 @@ from app.models.base import Base, SessionLocal, engine  # noqa: E402
 from app.models.models import SyncCheckpointModel, SyncRunModel  # noqa: E402
 from app.services.standard_normalizer import clean_standard_name, split_standard_reference  # noqa: E402
 from app.sync.v2_pipeline import stage_record  # noqa: E402
+from app.timeutil import utc_now  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 
@@ -131,7 +131,7 @@ class Handler(BaseHTTPRequestHandler):
                 checkpoint.page_number = page
                 checkpoint.cursor = str(payload.get("next_url") or "") or None
                 checkpoint.status = "complete" if payload.get("is_last") else "running"
-                checkpoint.updated_at = datetime.utcnow()
+                checkpoint.updated_at = utc_now()
                 db.commit()
             self._json(200, {"accepted": len(records), "inserted_total": State.inserted})
         except Exception as exc:
@@ -142,7 +142,7 @@ class Handler(BaseHTTPRequestHandler):
         with SessionLocal() as db:
             run = db.get(SyncRunModel, State.run_id)
             if run is not None:
-                run.finished_at = datetime.utcnow()
+                run.finished_at = utc_now()
                 run.status = "success" if State.failed == 0 else "partial"
                 run.found = State.inserted + State.unchanged
                 run.inserted = State.inserted

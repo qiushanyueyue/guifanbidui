@@ -121,3 +121,21 @@ def test_impossible_pre_code_edition_is_never_recommended():
 
     assert result.match_type == "exact"
     assert result.recommended_citation == "《建筑结构荷载规范》GB 50009-2012"
+
+
+def test_status_of_a_different_standard_is_not_reported_for_the_citation():
+    result = _matcher()(
+        input_code="GB 50099-2011",
+        input_name="建筑设计防火规范",
+        standard=_standard(status="abolished"),
+    )
+    assert result.match_type == "code_mismatch"
+
+
+def test_name_only_lookup_does_not_borrow_another_standards_status():
+    result = _matcher()(
+        input_code="",
+        input_name="建筑防火通用规范",
+        standard=_standard(status="replaced"),
+    )
+    assert result.match_type == "name_mismatch"

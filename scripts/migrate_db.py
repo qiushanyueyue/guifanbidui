@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import CheckConstraint, Column, MetaData, Table, inspect, text
@@ -24,6 +23,7 @@ from app.models.base import SessionLocal, engine
 from app.models.enums import StandardStatus, VerificationLevel, normalize_status
 from app.models.models import StandardModel
 from app.services.standard_normalizer import normalize_standard_code, normalized_name
+from app.timeutil import utc_now
 
 
 LEGACY_COLUMNS = {
@@ -78,7 +78,7 @@ def main() -> int:
             standard.status = normalize_status(standard.status).value
             if not standard.verification_level:
                 standard.verification_level = VerificationLevel.UNVERIFIED.value
-            standard.updated_at = standard.updated_at or standard.last_updated or datetime.utcnow()
+            standard.updated_at = standard.updated_at or standard.last_updated or utc_now()
             standard.record_updated_at = standard.record_updated_at or standard.last_updated or standard.updated_at
             standard.year = standard.revision_year or standard.year
             standard.issuing_authority = standard.issuing_authority or standard.publishing_department

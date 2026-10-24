@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, normalize_status
 from app.models.models import StandardV2Model, StandardV2SourceModel
+from app.repositories.standard_repo import contains_pattern
 from app.services.standard_normalizer import (
     normalize_standard_code,
     normalized_name,
@@ -100,8 +101,8 @@ class StandardV2Repo:
             cls._published(db)
             .filter(
                 or_(
-                    StandardV2Model.name.ilike(f"%{keyword.strip()}%"),
-                    StandardV2Model.normalized_name.ilike(f"%{wanted_name}%"),
+                    StandardV2Model.name.ilike(contains_pattern(keyword.strip()), escape="\\"),
+                    StandardV2Model.normalized_name.ilike(contains_pattern(wanted_name), escape="\\"),
                 )
             )
             .limit(max(limit * 5, 50))

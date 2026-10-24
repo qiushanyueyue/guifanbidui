@@ -28,6 +28,7 @@ from app.services.standard_normalizer import (
     parse_standard_code,
 )
 from app.sources.csres import has_mandatory_clause_repeal, parse_csres_replacement_text
+from app.timeutil import utc_now
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,7 @@ def stage_record(
         sync_run_id=sync_run_id,
         content_hash=digest,
         parse_status="pending",
-        fetched_at=datetime.utcnow(),
+        fetched_at=utc_now(),
     )
     try:
         # A second request can pass the lookup above before the first request
@@ -351,7 +352,7 @@ def publish_staging(db: Session) -> PublishReport:
         existing.first_seen_at = existing.first_seen_at or min(row.fetched_at for row in rows)
         existing.last_seen_at = max(row.fetched_at for row in rows)
         existing.last_verified_at = _status_verified_at(rows, verification)
-        existing.published_at = datetime.utcnow() if quality == "publishable" else None
+        existing.published_at = utc_now() if quality == "publishable" else None
         for row in rows:
             pending_evidence.append((existing, row))
         conflicts += int(source_conflict)

@@ -39,6 +39,7 @@
 - DeepSeek 默认模型为 `deepseek-v4-flash`；仅在 `ENABLE_REMOTE_EXTRACTION=true`、服务端 Secret 存在且本地零提取时调用。
 - 远程响应会过滤畸形编号；远程失败安全降级为空。
 - WorkBuddy 只读接口不应接收图纸、完整设计说明或内部资料。
+- 本地未提交改动（2026-10-24，`tested`）：匹配先核编号族/名称身份再给状态；公开 `/api/sync/status` 不含 `error_message`；搜索转义 LIKE 通配符；前端不再用无判定的模糊搜索兜底 verify 未找到。
 - 本地未提交改动（2026-10-24，`tested`，未部署）：`/api/v1/verify` 每次请求共享默认8秒联网预算且查询时不重试；`live_lookup_attempts` 负缓存使同一编号/名称24小时内不重复联网，不刷新核验时间；前端20秒请求超时并丢弃过期轮次结果。见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
 
 ## 验证基线
@@ -74,7 +75,8 @@
 - 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
 - 既有 datetime.utcnow 弃用警告保留，未扩大本轮为时间 API 重构。
-- 2026-10-24：查询时联网预算与负缓存只在本地实现并测试，尚未提交、部署或生产验证；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
+- 2026-10-24：查询时联网预算与负缓存已推送为 PR #7（CI 全绿，未合并、未部署）；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
+- 2026-10-24本地实测：CSRES 详情页单次12–20秒、搜索页约3秒，带已存详情 URL 的查询时复核在8秒预算内均为 `budget_exhausted`；搜建筑详情页返回“真人验证”页。查询时取证策略与预算待决定。
 
 ## 当前查新判定策略
 

@@ -106,7 +106,10 @@ def _use_v2(db: Session) -> bool:
         return False
     if selected == "v2":
         return True
-    return StandardV2Repo.has_data(db)
+    # Sessions are request-scoped, so probe the V2 table once per request.
+    if "use_v2" not in db.info:
+        db.info["use_v2"] = StandardV2Repo.has_data(db)
+    return db.info["use_v2"]
 
 
 def _result(db: Session, standard: StandardModel, *, source: str = "db") -> SearchResult:
@@ -146,14 +149,15 @@ def _result_v2(db: Session, standard: StandardV2Model, *, source: str = "db_v2")
     sources = StandardV2Repo.sources_for(db, standard.id)
     source_map = {item.source_name: item.source_url for item in sources if item.source_url}
     source_names = sorted({item.source_name for item in sources if item.source_name})
-    replaced_by_rows = (
-        db.query(StandardV2RelationModel)
+    target_codes = (
+        db.query(StandardV2Model.base_code)
+        .join(StandardV2RelationModel, StandardV2RelationModel.target_standard_id == StandardV2Model.id)
         .filter(StandardV2RelationModel.source_standard_id == standard.id)
         .filter(StandardV2RelationModel.relation_type == "replaced_by")
+        .order_by(StandardV2RelationModel.id)
         .all()
     )
-    targets = [db.get(StandardV2Model, item.target_standard_id) for item in replaced_by_rows]
-    replaced_by = "; ".join(item.base_code for item in targets if item is not None) or None
+    replaced_by = "; ".join(code for (code,) in target_codes) or None
     resolved_status = normalize_status(standard.status)
     result = SearchResult(
         id=standard.id,
@@ -399,6 +403,8 @@ def get_stats(db: Session = Depends(get_db)):
 
 @router.get("/sync/status", response_model=SyncStatusResponse)
 def get_sync_status(db: Session = Depends(get_db)):
+    # Public endpoint: raw error messages can carry source URLs or exception
+    # details, so they stay in logs and the protected cron probe omits them too.
     latest = _latest_sync(db)
     if latest is None:
         return SyncStatusResponse(latest=None)
@@ -414,7 +420,6 @@ def get_sync_status(db: Session = Depends(get_db)):
             "updated": latest.updated,
             "unchanged": latest.unchanged,
             "failed": latest.failed,
-            "error_message": latest.error_message,
         }
     )
 

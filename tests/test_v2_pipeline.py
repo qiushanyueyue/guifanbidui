@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 import json
 from pathlib import Path
 from sqlalchemy import create_engine, event
@@ -15,6 +15,7 @@ from app.models.models import (
     StandardV2RelationModel,
 )
 from app.sync.v2_pipeline import publish_staging, stage_record
+from app.timeutil import utc_now
 
 
 def _db():
@@ -125,7 +126,7 @@ def test_explicit_single_third_party_status_can_publish_current(source_name):
 def test_source_failure_does_not_replace_historical_explicit_status(failure_status):
     db = _db()
     evidence, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
-    old_time = datetime.utcnow() - timedelta(days=45)
+    old_time = utc_now() - timedelta(days=45)
     evidence.fetched_at = old_time
     publish_staging(db)
     previous = db.query(StandardV2Model).one()
@@ -145,7 +146,7 @@ def test_source_failure_does_not_replace_historical_explicit_status(failure_stat
 
 def test_cross_verified_freshness_requires_both_status_sources_to_be_fresh():
     db = _db()
-    old_time = datetime.utcnow() - timedelta(days=45)
+    old_time = utc_now() - timedelta(days=45)
     older, _ = stage_record(db, **_record(source_name='csres', raw_status='现行'))
     older.fetched_at = old_time
     stage_record(db, **_record(source_name='soujianzhu', raw_status='现行'))

@@ -41,18 +41,22 @@ def assess_standard_match(*, input_code: str | None, input_name: str | None, sta
         "conflict": ("source_conflict", "来源信息冲突，暂无法确认"),
     }
     citation = _citation(standard)
-    if status in status_decisions:
-        match_type, message = status_decisions[status]
-        return MatchDecision(match_type, 0.0, citation, message)
     wanted_code = normalize_standard_code(input_code)
     actual_code = normalize_standard_code(getattr(standard, "normalized_code", None) or getattr(standard, "code", None))
     wanted_name = normalized_name(input_name)
     actual_name = normalized_name(getattr(standard, "normalized_name", None) or getattr(standard, "name", None))
 
-    if wanted_code and wanted_code != actual_code:
-        if _code_family(wanted_code) == _code_family(actual_code):
-            return MatchDecision("code_type_mismatch", 0.9, citation, "标准类型标识不一致，请采用推荐编号")
+    # A record reached through a fuzzy name lookup may be a different standard;
+    # its status must not be reported as the cited standard's status.
+    if wanted_code and _code_family(wanted_code) != _code_family(actual_code):
         return MatchDecision("code_mismatch", 0.0, citation, "标准编号不一致")
+    if not wanted_code and wanted_name and actual_name and wanted_name != actual_name:
+        return MatchDecision("name_mismatch", 0.5, citation, "标准名称不一致")
+    if status in status_decisions:
+        match_type, message = status_decisions[status]
+        return MatchDecision(match_type, 0.0, citation, message)
+    if wanted_code and wanted_code != actual_code:
+        return MatchDecision("code_type_mismatch", 0.9, citation, "标准类型标识不一致，请采用推荐编号")
     if wanted_name and actual_name and wanted_name != actual_name:
         return MatchDecision("name_mismatch", 0.5, citation, "标准名称不一致")
     revision = revision_requirement(standard)
