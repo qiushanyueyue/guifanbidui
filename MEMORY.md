@@ -16,7 +16,7 @@
 - 已部署 data health、run-id 批次质量门、隔离 SQLite/PostgreSQL CI；只允许 GB↔GB/T 搜索别名，显式版次优先。语义见 [ADR-0004](docs/project-memory/decisions/ADR-0004-sync-health-and-ci.md)。
 - CSRES 作为主要覆盖/状态来源、搜建筑辅助、官方公告补充权威变更，见 [ADR-0005](docs/project-memory/decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。本轮修复空结果误报、中文查询编码、全字段表头映射与详情身份校验；日/周 unknown 用独立编号游标轮转，避免队首饥饿。历史证据重放不刷新核验时间，成功重新抓取才刷新。源码/真实抽查通过不等于下一次生产批次已验收。
 - 批量查新已实现最多4条并发，保留逐行结果与错误隔离；前端17项测试/lint/build和本地五条流程通过，9次新鲜缓存API抽测25091ms→8360ms。PR #5已合并，功能de2001c已在Vercel Ready并通过正式页面验收；CI/上线证据见CURRENT，抽样速度不代表过期联网复核。
-- 2026-10-24本地已实现并测试（未提交/未部署）：verify 联网共享默认8秒预算、查询时不重试；`live_lookup_attempts` 负缓存24小时内不重复联网且不刷新核验时间；前端20秒超时并丢弃过期轮次结果。见 [ADR-0006](docs/project-memory/decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
+- 2026-10-24 PR #7（CI全绿，未合并/未部署）：verify 联网共享默认8秒预算、查询时不重试；`live_lookup_attempts` 负缓存24小时内不重复联网且不刷新核验时间；前端20秒超时并丢弃过期轮次结果。见 [ADR-0006](docs/project-memory/decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
 - 版次不得早于规范编号年份；同序号、同年份的 `GB`↔`GB/T` 及“规范”→“标准”作为引用身份演进命中并返回修正建议。
 - `/api/v1/verify` 对生产持久数据库中超过默认 30 天或异常的记录自动有界联网复核；其余列表搜索仍以数据库为主。
 - 官方明确状态直接定案为 `official`；官方不可用时，工标网或搜建筑单源完整匹配且明确状态形成 `single_source`，两站一致升级为 `cross_verified`。编号、名称完整匹配的引用单独显示“完全一致”，不再被未知状态降为“待核验”。
@@ -24,6 +24,7 @@
 
 ## 不可忘记的风险
 
+- 查询时复核改为 CSRES 搜索页优先（详情页12–20秒、搜索页约3秒），搜索页不含替代关系，替代关系仍靠定时同步详情页刷新；搜建筑当前返回真人验证页，按不可用处理且不得绕过。未部署。
 - 生产仍有1151条`unknown`；漏收补查、单源明确结论及“完全一致”已部署，正常规范明确判断率 ≥95% 仍需继续批量验收。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源核验。
 - 搜建筑和工标网属于第三方证据，正式引用应回到发布机构原文。

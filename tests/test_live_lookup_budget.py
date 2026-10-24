@@ -183,3 +183,91 @@ def test_successful_discovery_is_persisted_and_recorded(monkeypatch, live_enable
 
     assert response.status == StandardStatus.CURRENT
     assert db.query(LiveLookupAttemptModel).one().outcome == "found"
+
+
+class PagedSource:
+    """Records which page kinds were requested and can burn the budget."""
+
+    def __init__(self, *, search_hit=None, detail_hit=None, search_delay=0.0):
+        self.calls: list[str] = []
+        self.search_hit = search_hit
+        self.detail_hit = detail_hit
+        self.search_delay = search_delay
+
+    def search(self, _query):
+        self.calls.append("search")
+        time.sleep(self.search_delay)
+        return [self.search_hit] if self.search_hit else []
+
+    def fetch_detail(self, _url):
+        self.calls.append("detail")
+        return self.detail_hit
+
+    def normalize(self, record):
+        return record
+
+
+def _paged_factory(csres):
+    from app.sources.base import SourceUnavailable
+
+    class Unavailable:
+        def search(self, _query):
+            raise SourceUnavailable("unavailable", source="test")
+
+        fetch_detail = search
+
+    return lambda name: csres if name == "csres" else Unavailable()
+
+
+def _csres_record(status="现行"):
+    return SourceRecord(source_name="csres", code="GB 50016-2014", name="建筑设计防火规范", source_status=status)
+
+
+def _plain_standard():
+    return StandardV2Model(code="GB 50016-2014", normalized_code="GB 50016-2014", name="建筑设计防火规范")
+
+
+URLS = {"csres": "http://www.csres.com/detail/1.html"}
+
+
+def test_query_time_tries_fast_search_page_before_detail():
+    csres = PagedSource(search_hit=_csres_record())
+    outcome = verify_live(_plain_standard(), source_urls=URLS, factory=_paged_factory(csres), deadline=time.monotonic() + 5)
+    assert outcome.status == StandardStatus.CURRENT
+    assert csres.calls == ["search"]
+
+
+def test_query_time_falls_back_to_detail_when_search_misses():
+    csres = PagedSource(detail_hit=_csres_record())
+    outcome = verify_live(_plain_standard(), source_urls=URLS, factory=_paged_factory(csres), deadline=time.monotonic() + 5)
+    assert outcome.status == StandardStatus.CURRENT
+    assert csres.calls == ["search", "detail"]
+
+
+def test_detail_is_skipped_when_search_used_up_the_budget():
+    csres = PagedSource(detail_hit=_csres_record(), search_delay=0.2)
+    outcome = verify_live(_plain_standard(), source_urls=URLS, factory=_paged_factory(csres), deadline=time.monotonic() + 0.1)
+    assert outcome is None
+    assert csres.calls == ["search"]
+
+
+def test_scheduled_refresh_without_deadline_keeps_detail_page():
+    csres = PagedSource(search_hit=_csres_record(), detail_hit=_csres_record())
+    verify_live(_plain_standard(), source_urls=URLS, factory=_paged_factory(csres))
+    assert csres.calls == ["detail"]
+
+
+def test_record_without_relations_does_not_conflict_with_one_that_has_them():
+    records = {
+        "csres": _csres_record("废止"),
+        "soujianzhu": SourceRecord(
+            source_name="soujianzhu", code="GB 50016-2014", name="建筑设计防火规范",
+            source_status="废止", replaced_by="GB 55037-2022",
+        ),
+    }
+    outcome = verify_live(
+        _plain_standard(),
+        factory=lambda name: PagedSource(search_hit=records.get(name)),
+    )
+    assert outcome.status == StandardStatus.ABOLISHED
+    assert outcome.verification_level == VerificationLevel.CROSS_VERIFIED

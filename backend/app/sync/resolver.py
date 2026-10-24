@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, VerificationLevel, normalize_status
 from app.models.models import StandardHistoryModel, StandardModel, StandardSourceModel
 from app.repositories.standard_repo import StandardRepo
+from app.timeutil import utc_now
 
 OFFICIAL_SOURCES = {"samr", "mohurd", "openstd"}
 SOURCE_PRIORITY = {"mohurd": 0, "samr": 0, "openstd": 1, "soujianzhu": 2, "csres": 3}
@@ -91,7 +91,7 @@ def _record_change(db: Session, standard: StandardModel, field: str, before: obj
     db.add(
         StandardHistoryModel(
             standard_id=standard.id,
-            changed_at=datetime.utcnow(),
+            changed_at=utc_now(),
             field_name=field,
             old_value=None if before is None else str(before),
             new_value=None if after is None else str(after),
@@ -132,7 +132,7 @@ def resolve_canonical_standard(db: Session, standard: StandardModel | int) -> St
                 "source_updated_at": selected.source_updated_at,
             }
         )
-    now = datetime.utcnow()
+    now = utc_now()
     for field, value in updates.items():
         before = getattr(standard, field)
         if value is not None or field in {"status", "verification_level", "source_conflict", "conflict_details", "canonical_source", "canonical_url"}:

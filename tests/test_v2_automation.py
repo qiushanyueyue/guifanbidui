@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from scripts import verify_v2_csres
 from sqlalchemy import create_engine
@@ -11,6 +11,7 @@ from app.sources.base import SourceRecord
 from app.sync.v2_pipeline import publish_staging
 from app.models.enums import StandardStatus, VerificationLevel
 from app.services.live_verification import LiveVerification, persist_live_verification
+from app.timeutil import utc_now
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,7 +131,7 @@ def test_successful_unchanged_csres_fetch_refreshes_evidence_without_duplicate(m
     monkeypatch.setattr(verify_v2_csres.CsresSource, 'search', lambda self, code: [record])
     monkeypatch.setattr('sys.argv', ['verify_v2_csres', '--code', record.code])
     assert verify_v2_csres.main() == 0
-    older = datetime.utcnow() - timedelta(days=45)
+    older = utc_now() - timedelta(days=45)
     db.query(StagingStandardModel).one().fetched_at = older
     publish_staging(db)
     assert db.query(StandardV2Model).one().last_verified_at == older
@@ -152,7 +153,7 @@ def test_repeated_live_verification_refresh_survives_rebuild():
     record = SourceRecord(source_name='csres', code=standard.code, name=standard.name, source_status='现行')
     outcome = LiveVerification(StandardStatus.CURRENT, VerificationLevel.SINGLE_SOURCE, (record,))
     persist_live_verification(db, standard, outcome)
-    older = datetime.utcnow() - timedelta(days=45)
+    older = utc_now() - timedelta(days=45)
     db.query(StagingStandardModel).one().fetched_at = older
     db.query(StandardV2SourceModel).one().fetched_at = older
     db.commit()

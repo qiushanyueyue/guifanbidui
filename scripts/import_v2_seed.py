@@ -22,6 +22,7 @@ from app.models.models import (  # noqa: E402
     StandardV2SourceModel,
 )
 from app.sync.v2_pipeline import _content_hash  # noqa: E402
+from app.timeutil import utc_now  # noqa: E402
 
 
 def import_seed_payload(db, payload: dict) -> dict[str, int]:
@@ -78,7 +79,7 @@ def import_seed_payload(db, payload: dict) -> dict[str, int]:
                 raw_status=source.get("observed_status"),
                 raw_text="published V2 metadata seed",
                 content_hash=digest,
-                fetched_at=fetched_at or datetime.utcnow(),
+                fetched_at=fetched_at or utc_now(),
             )
             db.add(staged)
             staging_by_key[staging_key] = staged

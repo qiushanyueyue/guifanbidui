@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, VerificationLevel
@@ -79,7 +80,12 @@ def recently_attempted(db: Session, key: str | None, *, now: datetime | None = N
 
     if key is None:
         return False
-    attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
+    try:
+        attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
+    except SQLAlchemyError:
+        # A not-yet-migrated attempts table must not break the lookup itself.
+        db.rollback()
+        return False
     if attempt is None:
         return False
     reference = now or datetime.now(UTC).replace(tzinfo=None)
@@ -144,18 +150,53 @@ def _fetch_one(
     deadline: float | None = None,
 ) -> SourceRecord | None:
     adapter = _bounded_adapter(source_name, factory, deadline)
-    try:
-        url = source_urls.get(source_name)
-        records = [adapter.fetch_detail(url)] if url else adapter.search(str(getattr(standard, "code", "")))
-    except (SourceError, NotImplementedError):
-        return None
-    for record in records:
-        if record is None:
+    url = source_urls.get(source_name)
+    if not url:
+        pages = ("search",)
+    elif deadline is None:
+        pages = ("detail",)
+    else:
+        # Query time: the search page is much faster than the detail page, so
+        # try it first and spend leftover budget on the detail page only.
+        pages = ("search", "detail")
+    for page in pages:
+        if deadline is not None and time.monotonic() >= deadline:
+            break
+        try:
+            if page == "search":
+                records = adapter.search(str(getattr(standard, "code", "")))
+            else:
+                records = [adapter.fetch_detail(url)]
+        except (SourceError, NotImplementedError):
             continue
-        normalized = adapter.normalize(record)
-        if _matches(normalized, standard):
-            return normalized
+        for record in records:
+            if record is None:
+                continue
+            normalized = adapter.normalize(record)
+            if _matches(normalized, standard):
+                return normalized
     return None
+
+
+def _combine_third_party(records: tuple[SourceRecord, ...]) -> LiveVerification | None:
+    """One source is single-source; two must agree on name, status and relations."""
+
+    if not records:
+        return None
+    if len(records) == 1:
+        return LiveVerification(records[0].status, VerificationLevel.SINGLE_SOURCE, records)
+    statuses = {record.status for record in records}
+    names = {normalized_name(record.name) for record in records}
+    # A record without relation text (e.g. a search row) carries no relation
+    # evidence; only explicit relation texts that differ are a conflict.
+    relations = {
+        ((record.replaces or "").strip(), (record.replaced_by or "").strip())
+        for record in records
+        if (record.replaces or "").strip() or (record.replaced_by or "").strip()
+    }
+    if "" in names or len(names) != 1 or len(statuses) != 1 or len(relations) > 1:
+        return LiveVerification(StandardStatus.CONFLICT, VerificationLevel.CONFLICT, records, True)
+    return LiveVerification(next(iter(statuses)), VerificationLevel.CROSS_VERIFIED, records)
 
 
 def verify_live(
@@ -176,19 +217,7 @@ def verify_live(
         for source_name in THIRD_PARTY_ORDER
         if (record := _fetch_one(source_name, standard, urls, factory, deadline)) is not None
     )
-    if not records:
-        return None
-    if len(records) == 1:
-        return LiveVerification(records[0].status, VerificationLevel.SINGLE_SOURCE, records)
-    statuses = {record.status for record in records}
-    names = {normalized_name(record.name) for record in records}
-    relations = {
-        ((record.replaces or "").strip(), (record.replaced_by or "").strip())
-        for record in records
-    }
-    if "" in names or len(names) != 1 or len(statuses) != 1 or len(relations) != 1:
-        return LiveVerification(StandardStatus.CONFLICT, VerificationLevel.CONFLICT, records, True)
-    return LiveVerification(next(iter(statuses)), VerificationLevel.CROSS_VERIFIED, records)
+    return _combine_third_party(records)
 
 
 def _code_family(code: str | None) -> tuple[str, str, str | None]:
@@ -260,19 +289,7 @@ def discover_live(
         for source_name in THIRD_PARTY_ORDER
         if (record := _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline)) is not None
     )
-    if not records:
-        return None
-    if len(records) == 1:
-        return LiveVerification(records[0].status, VerificationLevel.SINGLE_SOURCE, records)
-    statuses = {record.status for record in records}
-    names = {normalized_name(record.name) for record in records}
-    relations = {
-        ((record.replaces or "").strip(), (record.replaced_by or "").strip())
-        for record in records
-    }
-    if "" in names or len(names) != 1 or len(statuses) != 1 or len(relations) != 1:
-        return LiveVerification(StandardStatus.CONFLICT, VerificationLevel.CONFLICT, records, True)
-    return LiveVerification(next(iter(statuses)), VerificationLevel.CROSS_VERIFIED, records)
+    return _combine_third_party(records)
 
 
 def persist_discovered_standard(

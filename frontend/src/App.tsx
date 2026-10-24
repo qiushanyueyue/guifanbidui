@@ -51,25 +51,11 @@ function App() {
 
     updateResult('loading');
     try {
-      let results: SearchResult[] = [];
-
-      // Compare the user's name and code together through the business API.
-      if (code || name) {
-        const inputCode = edition ? `${code}（${edition}）` : code;
-        const verified = await api.verifyStandard(inputCode, name, signal);
-        results = verified.result ? [verified.result] : [];
-      }
-
-      // Priority 2: If Code search fails (or no code), try Name
-      if ((!results || results.length === 0) && name) {
-        results = await api.searchStandard(name, signal);
-      }
-
-      if (results && results.length > 0) {
-        updateResult(results[0]);
-      } else {
-        updateResult('not_found');
-      }
+      // verify already falls back to a name lookup server-side and attaches a match
+      // decision; a second client-side fuzzy search would show a result without one.
+      const inputCode = edition ? `${code}（${edition}）` : code;
+      const verified = await api.verifyStandard(inputCode, name, signal);
+      updateResult(verified.result ?? 'not_found');
     } catch {
       updateResult('error');
     }
@@ -107,7 +93,7 @@ function App() {
     } catch (error: unknown) {
       console.error('Error extracting standards:', error);
       const errorMsg = error instanceof Error ? error.message : '未知错误';
-      alert(`提取失败: ${errorMsg}\n\n请确认：\n1. 后端服务已启动 (http://localhost:8012)\n2. 网络连接正常`);
+      alert(`提取失败: ${errorMsg}\n\n请检查网络连接后重试；如持续失败，可能是查新服务暂时不可用。`);
     } finally {
       if (lookupRun.current === run) setIsLoading(false);
     }

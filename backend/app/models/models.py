@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
@@ -19,6 +18,7 @@ from sqlalchemy import (
 )
 
 from app.models.base import Base
+from app.timeutil import utc_now
 
 
 _STATUS_VALUES = "'current','upcoming','abolished','replaced','partially_amended','unknown','conflict'"
@@ -75,7 +75,7 @@ class StandardModel(Base):
     last_verified_at = Column(DateTime, nullable=True, index=True)
     source_updated_at = Column(String(80), nullable=True)
     record_updated_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=utc_now, nullable=False, index=True)
     # Compatibility fields retained for older scripts and clients.
     year = Column(String(4), nullable=True)
     publishing_department = Column(String(300), nullable=True)
@@ -139,7 +139,7 @@ class StandardRelationModel(Base):
         Integer, ForeignKey("standard_sources.id", ondelete="SET NULL"), nullable=True
     )
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class SyncRunModel(Base):
@@ -149,7 +149,7 @@ class SyncRunModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     source = Column(String(80), nullable=False)
     mode = Column(String(32), nullable=False, default="incremental", server_default="incremental")
-    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, default=utc_now, nullable=False)
     finished_at = Column(DateTime, nullable=True)
     status = Column(String(32), nullable=False, default="running")
     found = Column(Integer, nullable=False, default=0)
@@ -167,7 +167,7 @@ class StandardHistoryModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     standard_id = Column(Integer, ForeignKey("standards.id", ondelete="CASCADE"), nullable=False)
-    changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    changed_at = Column(DateTime, default=utc_now, nullable=False)
     field_name = Column(String(80), nullable=False)
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
@@ -200,7 +200,7 @@ class StagingStandardModel(Base):
     content_hash = Column(String(64), nullable=False)
     parse_status = Column(String(32), nullable=False, default="pending", server_default="pending")
     parse_error = Column(Text, nullable=True)
-    fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fetched_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class StandardV2Model(Base):
@@ -285,7 +285,7 @@ class StandardV2RelationModel(Base):
     relation_type = Column(String(40), nullable=False)
     raw_relation_text = Column(Text, nullable=True)
     evidence_staging_id = Column(Integer, ForeignKey("staging_standards.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class QuarantinedStandardModel(Base):
@@ -297,7 +297,7 @@ class QuarantinedStandardModel(Base):
     normalized_name = Column(String(500), nullable=True)
     reason_code = Column(String(80), nullable=False)
     reason_detail = Column(Text, nullable=True)
-    quarantined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    quarantined_at = Column(DateTime, default=utc_now, nullable=False)
     resolved_at = Column(DateTime, nullable=True)
 
 
@@ -312,7 +312,7 @@ class SyncCheckpointModel(Base):
     page_number = Column(Integer, nullable=True)
     last_record_id = Column(String(160), nullable=True)
     status = Column(String(32), nullable=False, default="pending", server_default="pending")
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class LiveLookupAttemptModel(Base):
@@ -357,7 +357,7 @@ class StandardDocumentModel(Base):
     title = Column(String(500), nullable=True)
     content_hash = Column(String(64), nullable=True)
     ingestion_status = Column(String(32), nullable=False, default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class StandardArticleModel(Base):
@@ -368,7 +368,7 @@ class StandardArticleModel(Base):
     article_number = Column(String(80), nullable=True)
     title = Column(String(500), nullable=True)
     body_hash = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class StandardChunkModel(Base):
@@ -379,4 +379,4 @@ class StandardChunkModel(Base):
     ordinal = Column(Integer, nullable=True)
     content = Column(Text, nullable=True)
     embedding_ref = Column(String(300), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)

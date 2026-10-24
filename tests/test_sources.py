@@ -176,3 +176,14 @@ def test_csres_diagnostics_include_response_shape_without_body(monkeypatch, capl
     assert 'HTTP_status=200' in caplog.text
     assert 'parse_result=parse_error' in caplog.text
     assert 'private-body-marker' not in caplog.text
+
+
+def test_soujianzhu_verification_page_is_source_unavailable():
+    from app.sources.soujianzhu import parse_soujianzhu_recent_html
+
+    html = (
+        "<html><head><title>真人验证 - 搜建筑网</title></head>"
+        '<body><a href="/NormAndRules/gfnr.aspx?id=215">真人验证 ©2008-2026 搜建筑 版权所有 丨 冀ICP</a></body></html>'
+    )
+    with pytest.raises(SourceUnavailable):
+        parse_soujianzhu_recent_html(html)

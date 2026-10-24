@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from difflib import SequenceMatcher
 import re
 from typing import Iterable
@@ -13,6 +12,14 @@ from sqlalchemy.orm import Session
 from app.models.enums import StandardStatus, VerificationLevel, normalize_status
 from app.models.models import StandardModel, StandardSourceModel
 from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_edition
+from app.timeutil import utc_now
+
+
+def contains_pattern(value: str) -> str:
+    """Build a LIKE pattern that treats user-supplied %, _ and \\ literally."""
+
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 class StandardRepo:
@@ -124,8 +131,8 @@ class StandardRepo:
             db.query(StandardModel)
             .filter(
                 or_(
-                    StandardModel.name.ilike(f"%{keyword.strip()}%"),
-                    StandardModel.normalized_name.ilike(f"%{normalized_query_name}%"),
+                    StandardModel.name.ilike(contains_pattern(keyword.strip()), escape="\\"),
+                    StandardModel.normalized_name.ilike(contains_pattern(normalized_query_name), escape="\\"),
                 )
             )
             .limit(max(limit * 5, 50))
@@ -168,7 +175,7 @@ class StandardRepo:
     ) -> tuple[StandardModel, bool]:
         canonical_code = normalize_standard_code(code)
         existing = StandardRepo.get_by_identity(db, canonical_code, edition, amendment)
-        now = datetime.utcnow()
+        now = utc_now()
         normalized_status = normalize_status(status)
         if existing is None:
             existing = StandardModel(

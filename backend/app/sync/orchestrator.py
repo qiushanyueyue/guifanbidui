@@ -26,6 +26,7 @@ from app.sources import (
     SamrSource,
 )
 from app.sync.resolver import resolve_canonical_standard
+from app.timeutil import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ def sync_one_source(
 ) -> SyncRunModel:
     """Run one source and persist a traceable result, including failures."""
 
-    run = SyncRunModel(source=source_name, status="running", started_at=datetime.utcnow())
+    run = SyncRunModel(source=source_name, status="running", started_at=utc_now())
     db.add(run)
     db.commit()
     adapter = adapter or build_source(source_name)
@@ -172,7 +173,7 @@ def sync_one_source(
                     .first()
                 )
                 old_hash = before.content_hash if before else None
-                source_row, _ = _upsert_source_row(db, standard.id, record, fetched_at=datetime.utcnow())
+                source_row, _ = _upsert_source_row(db, standard.id, record, fetched_at=utc_now())
                 _sync_relations(db, standard, record, source_row)
                 if created:
                     run.inserted += 1
@@ -192,20 +193,20 @@ def sync_one_source(
         for standard_id in touched:
             resolve_canonical_standard(db, standard_id)
         run.status = "partial" if run.failed else "success"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         db.commit()
         return run
     except SourceError as exc:
         run.status = "failed"
         run.error_message = f"{exc.category}: {exc.__class__.__name__}"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         db.commit()
         logger.warning("sync source=%s failed category=%s", source_name, exc.category)
         return run
     except Exception as exc:
         run.status = "failed"
         run.error_message = f"unexpected: {exc.__class__.__name__}"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         db.commit()
         logger.exception("sync source=%s failed unexpectedly", source_name)
         return run
@@ -230,7 +231,7 @@ def verify_existing_standards(
 ) -> SyncRunModel:
     """Re-check the oldest verified rows in a bounded batch."""
 
-    run = SyncRunModel(source=source_name, status="running", started_at=datetime.utcnow())
+    run = SyncRunModel(source=source_name, status="running", started_at=utc_now())
     db.add(run)
     db.commit()
     adapter = build_source(source_name)
@@ -256,7 +257,7 @@ def verify_existing_standards(
                 if not record.normalized_code:
                     run.failed += 1
                     continue
-                source_row, _ = _upsert_source_row(db, standard.id, record, fetched_at=datetime.utcnow())
+                source_row, _ = _upsert_source_row(db, standard.id, record, fetched_at=utc_now())
                 _sync_relations(db, standard, record, source_row)
                 resolve_canonical_standard(db, standard.id)
                 run.updated += 1
@@ -268,6 +269,6 @@ def verify_existing_standards(
         run.status = "failed"
         run.error_message = f"unexpected: {exc.__class__.__name__}"
         logger.exception("verify source=%s failed", source_name)
-    run.finished_at = datetime.utcnow()
+    run.finished_at = utc_now()
     db.commit()
     return run

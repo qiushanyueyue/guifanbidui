@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +20,7 @@ from app.services.standard_normalizer import normalize_standard_code, normalized
 from app.sources.base import ParseError, SourceError  # noqa: E402
 from app.sources.csres import CsresSource, SEARCH_URL  # noqa: E402
 from app.sync.v2_pipeline import stage_record  # noqa: E402
+from app.timeutil import utc_now  # noqa: E402
 
 
 def resume_start(*, candidate_count: int, checkpoint_offset: int | None) -> int:
@@ -203,7 +203,7 @@ def main() -> int:
                     staged.parse_status = "pending"
                     # A successful fresh fetch may have unchanged content.
                     # Only this verified path refreshes the observation time.
-                    staged.fetched_at = datetime.utcnow()
+                    staged.fetched_at = utc_now()
                     run.inserted += int(inserted)
                     run.unchanged += int(not inserted)
                 if record is None:
@@ -229,9 +229,9 @@ def main() -> int:
                 checkpoint.page_number = offset + 1
                 checkpoint.last_record_id = code
                 checkpoint.status = "running"
-                checkpoint.updated_at = datetime.utcnow()
+                checkpoint.updated_at = utc_now()
             db.commit()
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         run.status = "success" if run.failed == 0 else "partial"
         if checkpoint is not None and not explicit_mode:
             checkpoint.status = "complete" if start + len(selected) >= len(codes) else "running"

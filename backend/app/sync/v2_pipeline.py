@@ -28,6 +28,7 @@ from app.services.standard_normalizer import (
     parse_standard_code,
 )
 from app.sources.csres import has_mandatory_clause_repeal, parse_csres_replacement_text
+from app.timeutil import utc_now
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,7 @@ def stage_record(
         sync_run_id=sync_run_id,
         content_hash=digest,
         parse_status="pending",
-        fetched_at=datetime.utcnow(),
+        fetched_at=utc_now(),
     )
     try:
         # A second request can pass the lookup above before the first request
@@ -143,13 +144,16 @@ def _status_decision(rows: list[StagingStandardModel]) -> tuple[str, str, bool, 
     if official:
         verification = "official"
     else:
-        relation_values = {
-            re.sub(r"\s+", "", row.raw_relation_text or "")
-            for row in rows
-            if row.source_name in usable
+        # Compare each source's latest explicit relation text; rows without one
+        # (search pages, query-time checks) are not relation evidence.
+        latest_relations = {
+            row.source_name: row.raw_relation_text
+            for row in sorted(rows, key=lambda row: (row.fetched_at, row.id))
+            if row.source_name in usable and (row.raw_relation_text or "").strip()
         }
+        relation_values = {re.sub(r"\s+", "", text) for text in latest_relations.values()}
         if len(usable) > 1 and len(relation_values) > 1:
-            details = {row.source_name: row.raw_relation_text for row in rows if row.source_name in usable}
+            details = latest_relations
             return "conflict", "conflict", True, json.dumps(details, ensure_ascii=False, sort_keys=True)
         # Cross-verification requires two independent sources to explicitly
         # agree on status. A link or identity-only row is not status evidence.
@@ -351,7 +355,7 @@ def publish_staging(db: Session) -> PublishReport:
         existing.first_seen_at = existing.first_seen_at or min(row.fetched_at for row in rows)
         existing.last_seen_at = max(row.fetched_at for row in rows)
         existing.last_verified_at = _status_verified_at(rows, verification)
-        existing.published_at = datetime.utcnow() if quality == "publishable" else None
+        existing.published_at = utc_now() if quality == "publishable" else None
         for row in rows:
             pending_evidence.append((existing, row))
         conflicts += int(source_conflict)
