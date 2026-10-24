@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.models.enums import StandardStatus, VerificationLevel
-from app.models.models import StandardModel, StandardV2Model, StandardV2SourceModel
+from app.models.models import LiveLookupAttemptModel, StandardModel, StandardV2Model, StandardV2SourceModel
 from app.repositories.standard_repo import StandardRepo
 from app.repositories.standard_v2_repo import StandardV2Repo
 from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_standard_code
 from app.sources import SourceError, SourceRecord
+from app.sources.base import HttpSource
 from app.sync.orchestrator import _upsert_source_row, build_source
 from app.sync.resolver import resolve_canonical_standard
 from app.sync.v2_pipeline import stage_record
@@ -46,6 +48,72 @@ def live_refresh_enabled() -> bool:
     return bool(os.getenv("DATABASE_URL", "").strip())
 
 
+def live_budget_seconds() -> float:
+    try:
+        return max(1.0, float(os.getenv("LIVE_LOOKUP_BUDGET_SECONDS", "8")))
+    except ValueError:
+        return 8.0
+
+
+def live_retry_hours() -> float:
+    try:
+        return max(0.0, float(os.getenv("LIVE_LOOKUP_RETRY_HOURS", "24")))
+    except ValueError:
+        return 24.0
+
+
+def lookup_deadline() -> float:
+    return time.monotonic() + live_budget_seconds()
+
+
+def lookup_key(*, code: str | None, name: str | None = None) -> str | None:
+    normalized = normalize_standard_code(code)
+    if normalized:
+        return f"code:{normalized}"
+    wanted_name = normalized_name(name)
+    return f"name:{wanted_name}" if wanted_name else None
+
+
+def recently_attempted(db: Session, key: str | None, *, now: datetime | None = None) -> bool:
+    """Skip repeated live lookups that recently produced no definitive result."""
+
+    if key is None:
+        return False
+    attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
+    if attempt is None:
+        return False
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    return attempt.attempted_at >= reference - timedelta(hours=live_retry_hours())
+
+
+def record_attempt(db: Session, key: str | None, outcome: str, *, now: datetime | None = None) -> None:
+    if key is None:
+        return
+    attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
+    if attempt is None:
+        attempt = LiveLookupAttemptModel(lookup_key=key)
+        db.add(attempt)
+    attempt.attempted_at = now or datetime.now(UTC).replace(tzinfo=None)
+    attempt.outcome = outcome
+    db.commit()
+
+
+def attempt_outcome(result: LiveVerification | None, deadline: float | None) -> str:
+    if result is not None:
+        return "found"
+    if deadline is not None and time.monotonic() >= deadline:
+        return "budget_exhausted"
+    return "miss"
+
+
+def _bounded_adapter(source_name: str, factory, deadline: float | None):
+    adapter = factory(source_name)
+    if deadline is not None and isinstance(adapter, HttpSource):
+        adapter.deadline = deadline
+        adapter.max_retries = 0
+    return adapter
+
+
 def cache_is_fresh(standard: object, *, now: datetime | None = None) -> bool:
     status = StandardStatus(str(getattr(standard, "status", "unknown") or "unknown"))
     verified_at = getattr(standard, "last_verified_at", None)
@@ -68,8 +136,14 @@ def _matches(record: SourceRecord, standard: object) -> bool:
     return not expected_name or (bool(observed_name) and expected_name == observed_name)
 
 
-def _fetch_one(source_name: str, standard: object, source_urls: dict[str, str], factory) -> SourceRecord | None:
-    adapter = factory(source_name)
+def _fetch_one(
+    source_name: str,
+    standard: object,
+    source_urls: dict[str, str],
+    factory,
+    deadline: float | None = None,
+) -> SourceRecord | None:
+    adapter = _bounded_adapter(source_name, factory, deadline)
     try:
         url = source_urls.get(source_name)
         records = [adapter.fetch_detail(url)] if url else adapter.search(str(getattr(standard, "code", "")))
@@ -89,17 +163,18 @@ def verify_live(
     *,
     source_urls: dict[str, str] | None = None,
     factory=build_source,
+    deadline: float | None = None,
 ) -> LiveVerification | None:
     urls = source_urls or {}
     for source_name in OFFICIAL_ORDER:
-        record = _fetch_one(source_name, standard, urls, factory)
+        record = _fetch_one(source_name, standard, urls, factory, deadline)
         if record is not None:
             return LiveVerification(record.status, VerificationLevel.OFFICIAL, (record,))
 
     records = tuple(
         record
         for source_name in THIRD_PARTY_ORDER
-        if (record := _fetch_one(source_name, standard, urls, factory)) is not None
+        if (record := _fetch_one(source_name, standard, urls, factory, deadline)) is not None
     )
     if not records:
         return None
@@ -148,8 +223,9 @@ def _discover_one(
     code: str | None,
     name: str | None,
     factory,
+    deadline: float | None = None,
 ) -> SourceRecord | None:
-    adapter = factory(source_name)
+    adapter = _bounded_adapter(source_name, factory, deadline)
     queries = tuple(dict.fromkeys(item for item in (code, name) if item and item.strip()))
     for query in queries:
         try:
@@ -171,17 +247,18 @@ def discover_live(
     code: str | None,
     name: str | None,
     factory=build_source,
+    deadline: float | None = None,
 ) -> LiveVerification | None:
     """Find a missing local record from bounded live metadata queries."""
 
     for source_name in OFFICIAL_ORDER:
-        record = _discover_one(source_name, code=code, name=name, factory=factory)
+        record = _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline)
         if record is not None:
             return LiveVerification(record.status, VerificationLevel.OFFICIAL, (record,))
     records = tuple(
         record
         for source_name in THIRD_PARTY_ORDER
-        if (record := _discover_one(source_name, code=code, name=name, factory=factory)) is not None
+        if (record := _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline)) is not None
     )
     if not records:
         return None

@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const API_BASE_URL = '/api';
+// The backend caps query-time live lookups at about 8 s; leave headroom for
+// database work while still failing visibly instead of hanging forever.
+export const REQUEST_TIMEOUT_MS = 20_000;
+export const EXPORT_TIMEOUT_MS = 60_000;
+
+const http = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
 
 export interface StandardInfo {
     code: string;
@@ -132,37 +137,37 @@ export interface Stats {
 
 export const api = {
     extractStandards: async (text: string): Promise<StandardInfo[]> => {
-        const response = await axios.post(`${API_BASE_URL}/extract`, { text });
+        const response = await http.post(`/extract`, { text });
         return response.data.standards;
     },
 
-    searchStandard: async (keyword: string): Promise<SearchResult[]> => {
-        const response = await axios.post(`${API_BASE_URL}/search`, { keyword });
+    searchStandard: async (keyword: string, signal?: AbortSignal): Promise<SearchResult[]> => {
+        const response = await http.post(`/search`, { keyword }, { signal });
         return response.data.results;
     },
 
-    verifyStandard: async (code: string, name?: string | null): Promise<VerifyResponse> => {
-        const response = await axios.post(`${API_BASE_URL}/v1/verify`, { code, name: name || null });
+    verifyStandard: async (code: string, name?: string | null, signal?: AbortSignal): Promise<VerifyResponse> => {
+        const response = await http.post(`/v1/verify`, { code, name: name || null }, { signal });
         return response.data;
     },
 
     exportStandards: async (standards: StandardInfo[]): Promise<Blob> => {
-        const response = await axios.post(`${API_BASE_URL}/export`, { standards }, { responseType: 'blob' });
+        const response = await http.post(`/export`, { standards }, { responseType: 'blob', timeout: EXPORT_TIMEOUT_MS });
         return response.data;
     },
 
     getStandardDetail: async (url?: string, code?: string): Promise<StandardDetail> => {
-        const response = await axios.post(`${API_BASE_URL}/detail`, { url, code });
+        const response = await http.post(`/detail`, { url, code });
         return response.data;
     },
 
     getDatabaseStats: async (): Promise<Stats> => {
-        const response = await axios.get(`${API_BASE_URL}/stats`);
+        const response = await http.get(`/stats`);
         return response.data;
     },
 
     getCsresRedirectUrl: async (keyword: string): Promise<string> => {
-        const response = await axios.get(`${API_BASE_URL}/redirect_csres`, { params: { keyword } });
+        const response = await http.get(`/redirect_csres`, { params: { keyword } });
         return response.data.url;
     }
 };

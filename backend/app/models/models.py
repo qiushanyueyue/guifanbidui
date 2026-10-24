@@ -315,6 +315,18 @@ class SyncCheckpointModel(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class LiveLookupAttemptModel(Base):
+    """Negative cache for query-time live lookups; never evidence of status."""
+
+    __tablename__ = "live_lookup_attempts"
+    __table_args__ = (UniqueConstraint("lookup_key", name="uq_live_lookup_attempt_key"),)
+
+    id = Column(Integer, primary_key=True)
+    lookup_key = Column(String(600), nullable=False)
+    attempted_at = Column(DateTime, nullable=False)
+    outcome = Column(String(32), nullable=False)
+
+
 class NormativeDocumentModel(Base):
     __tablename__ = "normative_documents"
     __table_args__ = (Index("ix_normative_documents_name", "normalized_name"),)

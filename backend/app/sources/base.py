@@ -151,19 +151,36 @@ class HttpSource(StandardSource):
         self.timeout = timeout
         self.min_interval = max(0.0, min_interval)
         self._last_request = 0.0
+        # Scheduled syncs keep retries; query-time lookups set a monotonic
+        # deadline and disable retries so one request stays inside its budget.
+        self.max_retries = 3
+        self.deadline: float | None = None
 
-    def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, max_retries: int = 3, **kwargs) -> requests.Response:
+    def _bounded_timeout(self, timeout: float, url: str, attempt: int) -> float:
+        if self.deadline is None:
+            return timeout
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise RequestTimeout(
+                f"{self.name} query-time budget exhausted", source=self.name, url=url, retries=attempt
+            )
+        return min(timeout, remaining)
+
+    def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, max_retries: int | None = None, **kwargs) -> requests.Response:
+        max_retries = self.max_retries if max_retries is None else max_retries
+        timeout = kwargs.pop("timeout", self.timeout)
         for attempt in range(max_retries + 1):
             wait = self.min_interval - (time.monotonic() - self._last_request)
             if wait > 0:
                 time.sleep(wait)
+            request_timeout = self._bounded_timeout(timeout, url, attempt)
             self._last_request = time.monotonic()
             try:
                 response = self.session.request(
                     method,
                     url,
                     params=params,
-                    timeout=kwargs.pop("timeout", self.timeout),
+                    timeout=request_timeout,
                     **kwargs,
                 )
             except requests.Timeout as exc:
