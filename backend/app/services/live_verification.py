@@ -150,17 +150,31 @@ def _fetch_one(
     deadline: float | None = None,
 ) -> SourceRecord | None:
     adapter = _bounded_adapter(source_name, factory, deadline)
-    try:
-        url = source_urls.get(source_name)
-        records = [adapter.fetch_detail(url)] if url else adapter.search(str(getattr(standard, "code", "")))
-    except (SourceError, NotImplementedError):
-        return None
-    for record in records:
-        if record is None:
+    url = source_urls.get(source_name)
+    if not url:
+        pages = ("search",)
+    elif deadline is None:
+        pages = ("detail",)
+    else:
+        # Query time: the search page is much faster than the detail page, so
+        # try it first and spend leftover budget on the detail page only.
+        pages = ("search", "detail")
+    for page in pages:
+        if deadline is not None and time.monotonic() >= deadline:
+            break
+        try:
+            if page == "search":
+                records = adapter.search(str(getattr(standard, "code", "")))
+            else:
+                records = [adapter.fetch_detail(url)]
+        except (SourceError, NotImplementedError):
             continue
-        normalized = adapter.normalize(record)
-        if _matches(normalized, standard):
-            return normalized
+        for record in records:
+            if record is None:
+                continue
+            normalized = adapter.normalize(record)
+            if _matches(normalized, standard):
+                return normalized
     return None
 
 
@@ -173,11 +187,14 @@ def _combine_third_party(records: tuple[SourceRecord, ...]) -> LiveVerification 
         return LiveVerification(records[0].status, VerificationLevel.SINGLE_SOURCE, records)
     statuses = {record.status for record in records}
     names = {normalized_name(record.name) for record in records}
+    # A record without relation text (e.g. a search row) carries no relation
+    # evidence; only explicit relation texts that differ are a conflict.
     relations = {
         ((record.replaces or "").strip(), (record.replaced_by or "").strip())
         for record in records
+        if (record.replaces or "").strip() or (record.replaced_by or "").strip()
     }
-    if "" in names or len(names) != 1 or len(statuses) != 1 or len(relations) != 1:
+    if "" in names or len(names) != 1 or len(statuses) != 1 or len(relations) > 1:
         return LiveVerification(StandardStatus.CONFLICT, VerificationLevel.CONFLICT, records, True)
     return LiveVerification(next(iter(statuses)), VerificationLevel.CROSS_VERIFIED, records)
 

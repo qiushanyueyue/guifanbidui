@@ -144,13 +144,16 @@ def _status_decision(rows: list[StagingStandardModel]) -> tuple[str, str, bool, 
     if official:
         verification = "official"
     else:
-        relation_values = {
-            re.sub(r"\s+", "", row.raw_relation_text or "")
-            for row in rows
-            if row.source_name in usable
+        # Compare each source's latest explicit relation text; rows without one
+        # (search pages, query-time checks) are not relation evidence.
+        latest_relations = {
+            row.source_name: row.raw_relation_text
+            for row in sorted(rows, key=lambda row: (row.fetched_at, row.id))
+            if row.source_name in usable and (row.raw_relation_text or "").strip()
         }
+        relation_values = {re.sub(r"\s+", "", text) for text in latest_relations.values()}
         if len(usable) > 1 and len(relation_values) > 1:
-            details = {row.source_name: row.raw_relation_text for row in rows if row.source_name in usable}
+            details = latest_relations
             return "conflict", "conflict", True, json.dumps(details, ensure_ascii=False, sort_keys=True)
         # Cross-verification requires two independent sources to explicitly
         # agree on status. A link or identity-only row is not status evidence.

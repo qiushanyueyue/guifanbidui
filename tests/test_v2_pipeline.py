@@ -458,3 +458,14 @@ def test_rebuild_preserves_reviewed_clause_status_without_new_relation_evidence(
     publish_staging(db)
 
     assert db.query(StandardV2Model).one().mandatory_clause_status == "partially_repealed"
+
+
+def test_missing_relation_text_is_not_a_replacement_disagreement():
+    db = _db()
+    stage_record(db, **_record(raw_status="废止", raw_relation_text="被 GB 55037-2022 替代"))
+    # A search-page row carries status but no relation text.
+    stage_record(db, **_record(source_name="csres", source_url="https://example.test/csres/1", raw_status="废止"))
+    publish_staging(db)
+    row = db.query(StandardV2Model).one()
+    assert row.status == "abolished"
+    assert row.verification_level == "cross_verified"

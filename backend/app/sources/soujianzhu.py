@@ -57,8 +57,16 @@ def _explicit_status(value: str | None) -> str | None:
     return match.group(1) if match else None
 
 
+_VERIFICATION_MARKERS = ("真人验证", "安全验证", "人机验证", "访问验证")
+
+
 def parse_soujianzhu_recent_html(html: str, *, base_url: str = DEFAULT_BASE_URL) -> list[SourceRecord]:
     soup = BeautifulSoup(html, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    if any(marker in title for marker in _VERIFICATION_MARKERS):
+        # A bot check is an unavailable source, never parseable evidence; it is
+        # not bypassed.
+        raise SourceUnavailable("Soujianzhu returned a verification page", source="soujianzhu")
     links = soup.find_all("a", href=True)
     records: list[SourceRecord] = []
     for link in links:
