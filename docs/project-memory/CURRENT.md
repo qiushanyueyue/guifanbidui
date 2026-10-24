@@ -1,32 +1,31 @@
 # 当前事实快照
 
-- snapshot_id: `2026-10-04-parallel-lookup`
-- as_of: `2026-10-04T23:40:11+08:00`
-- verification: `production_code_and_browser_verified; live_api_performance_measured`
+- snapshot_id: `2026-10-24-review-deployed`
+- as_of: `2026-10-24T23:45:47+08:00`
+- verification: `production_code_deployed_and_domain_verified; live_data_quality_degraded`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-10-04T23:40:11+08:00`
-- verification: `production_code_and_browser_verified`
-- evidence: GitHub CLI/API、Vercel deployment metadata、正式页面实际提取查新。
+- as_of: `2026-10-24T23:45:47+08:00`
+- verification: `production_code_deployed_and_domain_verified`
+- evidence: GitHub PR/CI/API、Vercel commit status、正式域名只读 API 与真实规范核验。
 
-- 批量查新加速通过 [PR #5](https://github.com/qiushanyueyue/guifanbidui/pull/5) 合并，功能提交 `de2001c0a79dd3abff203a17b3a98ca6b024650f`；后续验收文档不改变功能。
-- 生产部署 `dpl_Z2e9oHX4zbvQ8eMFv3cAK8QBRiWt` 为 Ready，Git元数据对应上述提交，正式域名 `guifan.108923.xyz` 已指向该部署。
-- PR CI `37213549069`、分支 CI `37213528679`、main CI `37213627088` 的backend/frontend/postgres-smoke全部通过；前端17项测试/lint/build以及本地五条流程实际通过。
+- [PR #7](https://github.com/qiushanyueyue/guifanbidui/pull/7) 合并为 `c6ae788ae44b4c9a5e8632a1d8c23eba8b660501`；随后 [PR #8](https://github.com/qiushanyueyue/guifanbidui/pull/8) 合并，最终 `main` 为 `6e535f9defee4a476387b5eacbdb26595fa67e8b`。
+- 最终 `main` 的 push CI `40108281983` 中 backend/frontend/postgres-smoke 全部通过；PR #8 同步最新 `main` 后 8 项 CI/Vercel 检查也全部通过。
+- 合并提交的 Vercel 生产部署状态为 success；正式域名首页返回 HTTP 200，正式 API 字段已证明新代码生效。
 - main继续要求三项必过检查、严格最新分支和管理员约束，禁止force-push/删除；CI通过不表示来源批次健康。
 
 ## 数据快照
 
-- as_of: `2026-10-04T23:40:11+08:00`
+- as_of: `2026-10-24T23:45:47+08:00`
 - verification: `production_readonly_verified`
-- evidence: 公网 `/api/stats`、`/api/health`、GitHub日批run `37188992669`的状态（本轮未追溯失败日志根因）。
+- evidence: 公网 `/api/stats`、`/api/health`、`/api/sync/status`；本轮未触发同步或写入验收。
 
-- 公开总数1743；554 current、1 upcoming、37 abolished、1151 unknown、0 conflict，最近发布时间2026-10-04T08:29:56.144183Z。
-- status/database=ok，data=degraded，unknown_rate=0.6604、latest_sync_failure_rate=0.76，csres=partial；samr/mohurd/openstd/soujianzhu批次仍never。
-- 今日自然日批已运行且工作流仍failure，不能声称管线完全健康；旧25/25 ParseError已属于10月3日历史，生产关系重建与失败分类需要单独核验。
-- 本轮不触发批量同步或数据治理；速度抽测先确认缓存新鲜后调用verify，未为提速延长缓存或关闭联网复核。
+- 公开总数1779；1036 current、16 upcoming、137 abolished、590 unknown、0 conflict，最近发布时间 `2026-10-24T07:21:17.079407Z`。
+- status/database=ok，data=degraded，unknown_rate=0.3316、latest_sync_failure_rate=0.0；最近同步 id=62、source=csres、status=success、found=25、inserted=25，samr/mohurd/openstd/soujianzhu 仍为 never。
+- 数据质量仍不能称为完全健康；未确认率超过健康阈值。本轮不触发批量同步，不以发布部署代替全库来源治理。
 
 ## 当前行为不变量
 
@@ -39,20 +38,19 @@
 - DeepSeek 默认模型为 `deepseek-v4-flash`；仅在 `ENABLE_REMOTE_EXTRACTION=true`、服务端 Secret 存在且本地零提取时调用。
 - 远程响应会过滤畸形编号；远程失败安全降级为空。
 - WorkBuddy 只读接口不应接收图纸、完整设计说明或内部资料。
-- 本地未提交改动（2026-10-24，`tested`）：匹配先核编号族/名称身份再给状态；公开 `/api/sync/status` 不含 `error_message`；搜索转义 LIKE 通配符；前端不再用无判定的模糊搜索兜底 verify 未找到。
-- 本地未提交改动（2026-10-24，`tested`，未部署）：`/api/v1/verify` 每次请求共享默认8秒联网预算且查询时不重试；`live_lookup_attempts` 负缓存使同一编号/名称24小时内不重复联网，不刷新核验时间；前端20秒请求超时并丢弃过期轮次结果。见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
+- 2026-10-24 PR #8（`fd51ead`，已随 `main@6e535f9` 部署）：匹配先核编号族/名称身份再给状态；公开 `/api/sync/status` 不含 `error_message`；搜索转义 LIKE 通配符；前端不再用无判定的模糊搜索兜底 verify 未找到。正式 `/api/sync/status` 已实测不含该字段。
+- 2026-10-24 PR #7/#8（已部署）：`/api/v1/verify` 每次请求共享默认8秒联网预算且查询时不重试；`live_lookup_attempts` 负缓存使同一编号/名称24小时内不重复联网，不刷新核验时间；前端20秒请求超时并丢弃过期轮次结果。见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
 
 ## 验证基线
 
-- as_of: `2026-10-03T18:09:54+08:00`
+- as_of: `2026-10-24T23:45:47+08:00`
 - verification: `tested_local_and_github_ci`
-- evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite 迁移/seed/golden。
+- evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite/PostgreSQL、最终 main CI。
 
-- 本轮完整后端 147 项通过；154 个既有 datetime.utcnow 弃用警告。
-- 前端 14 项、ESLint、Vite build 通过。
+- 本轮完整后端 201 项通过，前端 18 项、ESLint、Vite build 通过。
 - 隔离 SQLite 迁移连续两次通过；仓库 seed 的黄金案例 50/50，禁用联网复核。
 - 目录审计 8 项通过，测试使用归档 raw_value 重建临时 Excel。原 7 项 FileNotFoundError 来自过时个人路径，不是业务回归。
-- GitHub PR CI `37115122521` 与 main CI `37115279046` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移两次及 seed 黄金案例实际通过。
+- 最终 main CI `40108281983` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移与 smoke 实际通过。
 
 ## 2026-10-03 生产回归
 
@@ -66,17 +64,26 @@
 
 ## 当前风险与未验证项
 
-- as_of: `2026-10-04T23:40:11+08:00`
+- as_of: `2026-10-24T23:45:47+08:00`
 - verification: `mixed`
-- evidence: 同步日志、公开状态数量、官方适配器代码。
+- evidence: 最终 main CI、生产只读 API、代码审查。
 
-- 1151条unknown仍需来源治理，不能直接转为current。
-- 2026-10-04日批仍失败，公开failure_rate=0.76、csres=partial；新关系重建与具体失败分类尚未逐项核验。10月3日的25/25 ParseError为历史证据。
+- 590条unknown仍需来源治理，不能直接转为current；公开健康状态仍为 `degraded`。
 - 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
-- 既有 datetime.utcnow 弃用警告保留，未扩大本轮为时间 API 重构。
-- 2026-10-24：查询时联网预算与负缓存已推送为 PR #7（CI 全绿，未合并、未部署）；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
-- 2026-10-24本地实测：CSRES 详情页单次12–20秒、搜索页约3秒。查询时复核已改为搜索页优先、有剩余预算才查详情页，同批记录实测1.4–3.0秒完成；搜建筑“真人验证”页按来源不可用处理（本地已测试，未部署）。见 ADR-0006 补充决定。
+- 2026-10-24：查询时联网预算与负缓存已随 PR #7/#8 部署；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
+- 2026-10-24实测：CSRES 详情页单次12–20秒、搜索页约3秒。查询时复核已部署为搜索页优先、有剩余预算才查详情页，同批记录1.4–3.0秒完成；搜建筑“真人验证”页按自动化取证不可用处理。人工可在浏览器处理验证，但当前服务端不会复用该人工浏览器会话，因此该来源本次不贡献证据，也不会阻断数据库查询或其他来源比对。
+- 2026-10-24代码审查残留：查询预算不是严格的墙钟总时限；`live_lookup_attempts` 没有过期行清理，公共输入可使表持续增长；联网来源成功但持久化失败时仍会记录 `found`，同一编号随后在重试窗口内不再联网。
+
+## 2026-10-24 公开历史凭据风险
+
+- as_of: `2026-10-24T23:35:36+08:00`
+- verification: `reachable_git_history_scanned; public_repository_confirmed`
+- evidence: 本地扫描当前工作树、全部可达 Git blob 和提交消息；GitHub 仓库公开，Secret Scanning 未启用。
+
+- 当前工作树、`origin/main` 和 PR #7/#8 当前树未检出密钥候选；没有跟踪 `.env`、私钥或凭据文件。
+- 公共 Git 历史中存在一处 `backend/ocr_standards.py` 的硬编码 DeepSeek 风格密钥候选，位于初始提交 `58bdaf7` 和后续历史 `2ae84f0`；当前文件已不再包含该值。未调用第三方接口验证有效性，必须按已泄露凭据处理。
+- GitHub 历史无法靠删除当前文件消除；需要先在 DeepSeek 侧禁用并轮换相关凭据，再通过受控历史清理流程删除所有分支中的旧 blob，并复查缓存、派生仓库和公开引用。
 
 ## 当前查新判定策略
 
