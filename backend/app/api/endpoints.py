@@ -48,11 +48,16 @@ from app.services.extractor import extract_standards_from_text
 from app.services.standard_matcher import assess_standard_match
 from app.services.business_conclusion import business_conclusion
 from app.services.live_verification import (
+    attempt_outcome,
     cache_is_fresh,
     discover_live,
     live_refresh_enabled,
+    lookup_deadline,
+    lookup_key,
     persist_discovered_standard,
     persist_live_verification,
+    recently_attempted,
+    record_attempt,
     verify_live,
 )
 from app.sources.soujianzhu import canonical_soujianzhu_full_text_url
@@ -419,6 +424,14 @@ def health_check(db: Session = Depends(get_db)):
     return _health_payload(db)
 
 
+def _record_attempt_safely(db: Session, key: str | None, outcome: str) -> None:
+    try:
+        record_attempt(db, key, outcome)
+    except Exception:
+        db.rollback()
+        logger.exception("could not record live lookup attempt key=%s", key)
+
+
 @router.post("/v1/verify", response_model=VerifyResponse)
 def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     repo = _repo(db)
@@ -426,14 +439,20 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     if standard is None and request.name:
         matches = repo.search(db, request.name, limit=1)
         standard = matches[0] if matches else None
-    if standard is None and live_refresh_enabled():
+    # One request-wide budget keeps discovery and refresh inside the platform
+    # timeout; the attempt table stops unresolved codes re-querying sources.
+    deadline = lookup_deadline()
+    discovery_key = lookup_key(code=request.code, name=request.name)
+    if standard is None and live_refresh_enabled() and not recently_attempted(db, discovery_key):
+        discovered = None
         try:
-            discovered = discover_live(code=request.code, name=request.name)
+            discovered = discover_live(code=request.code, name=request.name, deadline=deadline)
             if discovered is not None:
                 standard = persist_discovered_standard(db, discovered, use_v2=repo is StandardV2Repo)
         except Exception:
             db.rollback()
             logger.exception("query-time discovery failed for code=%s", request.code)
+        _record_attempt_safely(db, discovery_key, attempt_outcome(discovered, deadline))
     if standard is None:
         return VerifyResponse(
             input_code=request.code,
@@ -441,19 +460,22 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
             match_type="not_found",
             message="本地规范库未找到匹配记录",
         )
-    if live_refresh_enabled() and not cache_is_fresh(standard):
+    refresh_key = lookup_key(code=standard.normalized_code or standard.code)
+    if live_refresh_enabled() and not cache_is_fresh(standard) and not recently_attempted(db, refresh_key):
         source_urls = {
             source.source_name: source.source_url
             for source in repo.sources_for(db, standard.id)
             if source.source_url
         }
+        refreshed = None
         try:
-            refreshed = verify_live(standard, source_urls=source_urls)
+            refreshed = verify_live(standard, source_urls=source_urls, deadline=deadline)
             if refreshed is not None:
                 persist_live_verification(db, standard, refreshed)
         except Exception:
             db.rollback()
             logger.exception("query-time verification failed for standard_id=%s", standard.id)
+        _record_attempt_safely(db, refresh_key, attempt_outcome(refreshed, deadline))
     result = _to_result(db, standard)
     decision = assess_standard_match(input_code=request.code, input_name=request.name, standard=standard)
     result.match_type = decision.match_type

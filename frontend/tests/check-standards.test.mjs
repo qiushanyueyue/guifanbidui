@@ -66,3 +66,18 @@ test('a handled row error does not prevent the remaining requests from running',
   assert.equal(results.get(standards[0]), 'error');
   assert.equal([...results.values()].filter(value => value === 'ok').length, 8);
 });
+
+test('a superseded batch stops starting new rows', async () => {
+  const started = [];
+  const release = new Map();
+  let active = true;
+  const batch = checkStandardsConcurrently(standards, async standard => {
+    started.push(standard.code);
+    await new Promise(resolve => release.set(standard.code, resolve));
+  }, () => active);
+  assert.deepEqual(started, ['GB 0', 'GB 1', 'GB 2', 'GB 3']);
+  active = false;
+  for (const code of ['GB 0', 'GB 1', 'GB 2', 'GB 3']) release.get(code)();
+  await batch;
+  assert.equal(started.length, 4);
+});

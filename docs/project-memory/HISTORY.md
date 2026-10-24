@@ -220,3 +220,12 @@
 - evidence: PR/分支/main CI37213549069/37213528679/37213627088三组检查全绿；正式页面提取GB50009/50010/50011并查新得到1完全一致/2属性修正/0未找到，浏览器error/warn为0，部署限定验收10分钟窗口无error/fatal日志。9次缓存API样本25091ms→8360ms，不外推为全场景速度保证。
 - invalidated: 本轮“CI与上线待验收”已被实际证据取代；旧10月3日25/25失败与1157unknown不再是当前快照。今日只读公开快照554current/1upcoming/37abolished/1151unknown，来源批次失败率0.76、任务仍failure。
 - remaining: 过期联网核验耗时仍受外部来源影响；自然批次失败和关系图实际重建另行核验，本次不扩大治理范围。
+
+## 2026-10-24 查询时联网复核总时限、负缓存与前端过期结果丢弃
+
+- event_id: `2026-10-24-live-lookup-budget`
+- status: tested
+- scope: `/api/v1/verify` 查询时发现与复核、`HttpSource` 请求循环、新表 `live_lookup_attempts`、前端 `api.ts`/`App.tsx`/`checkStandards.ts`。
+- result: 每次 verify 共享默认8秒总预算（`LIVE_LOOKUP_BUDGET_SECONDS`），查询时适配器不重试，预算耗尽不再发请求；同一编号/名称在 `LIVE_LOOKUP_RETRY_HOURS`（默认24小时）内不重复联网，负缓存不改 `last_verified_at` 与状态证据。前端统一20秒超时（导出60秒），新一轮提取/查新/清空会取消旧请求并丢弃迟到结果。决策见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
+- evidence: 后端全量184项通过（新增8项），隔离SQLite迁移两次、seed导入1738条、黄金案例50/50；前端18项测试、ESLint、Vite build通过。本地服务对真实CSRES：GB 50038-2005 unknown首次复核0.67s升为current/single_source，重复查询8ms；漏收编号 GB 59999-2021 首次0.96s记为miss，重复查询6ms未联网。本地浏览器提取三条规范流程正常，无控制台错误；本地缓存请求毫秒级完成，浏览器中未能观察到取消中途请求，该行为由代码与单测覆盖。
+- remaining_risk: 未提交、未部署，生产未验证；预算耗尽的真实比例、交叉核验比例变化和生产函数时限待上线后观察。

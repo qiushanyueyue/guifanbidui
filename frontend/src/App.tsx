@@ -16,6 +16,14 @@ function App() {
   const [stats, setStats] = useState<Stats>({ count: 0, last_updated: null, current: 0, upcoming: 0, abolished: 0, replaced: 0, partially_amended: 0, unknown: 0, conflict: 0 });
   const resultKeys = useRef(new WeakMap<StandardInfo, string>());
   const nextResultKey = useRef(0);
+  // Each extract/check-all/clear starts a new run; older responses are aborted and ignored.
+  const lookupRun = useRef({ id: 0, controller: new AbortController() });
+
+  const startLookupRun = useCallback(() => {
+    lookupRun.current.controller.abort();
+    lookupRun.current = { id: lookupRun.current.id + 1, controller: new AbortController() };
+    return lookupRun.current;
+  }, []);
 
   const getResultKey = useCallback((standard: StandardInfo): string => {
     const existing = resultKeys.current.get(standard);
@@ -31,7 +39,10 @@ function App() {
 
     // Keep a row-specific key so duplicate codes and editions cannot overwrite each other.
     const key = resultKey || code || name || 'unknown';
+    const run = lookupRun.current;
+    const { signal } = run.controller;
     const updateResult = (value: SearchResult | 'loading' | 'error' | 'not_found') => {
+      if (lookupRun.current !== run) return;
       setResultsMap(prev => ({
         ...prev,
         [key]: value,
@@ -45,13 +56,13 @@ function App() {
       // Compare the user's name and code together through the business API.
       if (code || name) {
         const inputCode = edition ? `${code}（${edition}）` : code;
-        const verified = await api.verifyStandard(inputCode, name);
+        const verified = await api.verifyStandard(inputCode, name, signal);
         results = verified.result ? [verified.result] : [];
       }
 
       // Priority 2: If Code search fails (or no code), try Name
       if ((!results || results.length === 0) && name) {
-        results = await api.searchStandard(name);
+        results = await api.searchStandard(name, signal);
       }
 
       if (results && results.length > 0) {
@@ -65,8 +76,11 @@ function App() {
   }, []);
 
   const checkStandards = useCallback(async (items: StandardInfo[]) => {
-    await checkStandardsConcurrently(items, std =>
-      checkStandard(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std)),
+    const run = lookupRun.current;
+    await checkStandardsConcurrently(
+      items,
+      std => checkStandard(std.code, std.name || undefined, std.edition || std.revision_year, getResultKey(std)),
+      () => lookupRun.current === run,
     );
   }, [checkStandard, getResultKey]);
 
@@ -75,9 +89,11 @@ function App() {
   }, []);
 
   const handleExtract = async (text: string) => {
+    const run = startLookupRun();
     setIsLoading(true);
     try {
       const extracted = await api.extractStandards(text);
+      if (lookupRun.current !== run) return;
       const nonEmptyStandards = extracted.filter((standard) => (
         Boolean(standard.code?.trim()) || Boolean(standard.name?.trim())
       ));
@@ -93,11 +109,13 @@ function App() {
       const errorMsg = error instanceof Error ? error.message : '未知错误';
       alert(`提取失败: ${errorMsg}\n\n请确认：\n1. 后端服务已启动 (http://localhost:8012)\n2. 网络连接正常`);
     } finally {
-      setIsLoading(false);
+      if (lookupRun.current === run) setIsLoading(false);
     }
   };
 
   const handleClear = () => {
+    startLookupRun();
+    setIsLoading(false);
     setStandards([]);
     setResultsMap({});
   };
@@ -125,12 +143,13 @@ function App() {
 
   const handleCheckAll = async () => {
     if (standards.length === 0) return;
+    const run = startLookupRun();
     setIsLoading(true);
     setResultsMap({});
     try {
       await checkStandards(standards);
     } finally {
-      setIsLoading(false);
+      if (lookupRun.current === run) setIsLoading(false);
     }
   };
 
