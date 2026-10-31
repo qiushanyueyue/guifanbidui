@@ -93,14 +93,22 @@ def recently_attempted(db: Session, key: str | None, *, now: datetime | None = N
 
 
 def record_attempt(db: Session, key: str | None, outcome: str, *, now: datetime | None = None) -> None:
+    """Upsert an attempt and opportunistically remove entries outside the cache window."""
+
     if key is None:
         return
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
     attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
     if attempt is None:
         attempt = LiveLookupAttemptModel(lookup_key=key)
         db.add(attempt)
-    attempt.attempted_at = now or datetime.now(UTC).replace(tzinfo=None)
+    attempt.attempted_at = reference
     attempt.outcome = outcome
+    db.flush()
+    cutoff = reference - timedelta(hours=live_retry_hours())
+    db.query(LiveLookupAttemptModel).filter(
+        LiveLookupAttemptModel.attempted_at < cutoff
+    ).delete(synchronize_session=False)
     db.commit()
 
 

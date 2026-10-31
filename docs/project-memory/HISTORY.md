@@ -272,3 +272,12 @@
 - security_probe: 正式域名对 `.env`、`.env.production`、`.git/config`、`backend/.env`、`backend/.env.local` 均返回 404；当前 `origin/main` 未检出常见密钥模式。公开 Git 历史中的旧 DeepSeek 风格密钥候选仍未被历史重写清除，不能把当前树清洁表述为历史已安全。
 - supersedes: 同日审查条目中“两个 PR 均未合并、正式域名仍运行旧版、未执行生产部署”的阶段状态；同日数据快照的 1743/554/1151 已被本次 1779/1036/590 只读观察取代。
 - remaining_risk: 已部署代码仍有负缓存误记 `found`、`live_lookup_attempts` 无过期清理、8 秒预算非严格墙钟上限三项残留；数据健康仍为 degraded；历史凭据需先在提供方轮换，再受控清理所有分支历史。
+
+## 2026-10-24 负缓存持久化失败与过期清理修正
+
+- event_id: `2026-10-24-negative-cache-consistency`
+- status: tested_not_deployed
+- scope: `/api/v1/verify` 查询时发现/复核的尝试记录顺序、`live_lookup_attempts` 过期清理、`attempted_at` 索引与迁移。
+- result: 来源结果只有成功持久化后才记录 `found`；持久化异常或返回空结果时不写负缓存，下一请求仍可联网重试。每次写尝试记录时删除重试窗口外的旧行，避免公共输入使表无限增长。
+- evidence: 后端全量 `204 passed`，新增测试覆盖复核持久化失败、发现持久化失败和过期行清理；隔离 SQLite 迁移连续执行两次通过；预建缺少索引的旧 `live_lookup_attempts` 表后再迁移两次，索引 `ix_live_lookup_attempts_attempted_at` 成功补齐。
+- remaining_risk: 尚未推送或部署，生产仍保留旧行为；8 秒联网预算仍是软上限，不由本次改变。

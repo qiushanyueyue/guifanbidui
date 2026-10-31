@@ -450,14 +450,20 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     discovery_key = lookup_key(code=request.code, name=request.name)
     if standard is None and live_refresh_enabled() and not recently_attempted(db, discovery_key):
         discovered = None
+        recorded_outcome = None
         try:
             discovered = discover_live(code=request.code, name=request.name, deadline=deadline)
-            if discovered is not None:
+            if discovered is None:
+                recorded_outcome = attempt_outcome(None, deadline)
+            else:
                 standard = persist_discovered_standard(db, discovered, use_v2=repo is StandardV2Repo)
+                if standard is not None:
+                    recorded_outcome = attempt_outcome(discovered, deadline)
         except Exception:
             db.rollback()
             logger.exception("query-time discovery failed for code=%s", request.code)
-        _record_attempt_safely(db, discovery_key, attempt_outcome(discovered, deadline))
+        if recorded_outcome is not None:
+            _record_attempt_safely(db, discovery_key, recorded_outcome)
     if standard is None:
         return VerifyResponse(
             input_code=request.code,
@@ -473,14 +479,19 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
             if source.source_url
         }
         refreshed = None
+        recorded_outcome = None
         try:
             refreshed = verify_live(standard, source_urls=source_urls, deadline=deadline)
-            if refreshed is not None:
+            if refreshed is None:
+                recorded_outcome = attempt_outcome(None, deadline)
+            else:
                 persist_live_verification(db, standard, refreshed)
+                recorded_outcome = attempt_outcome(refreshed, deadline)
         except Exception:
             db.rollback()
             logger.exception("query-time verification failed for standard_id=%s", standard.id)
-        _record_attempt_safely(db, refresh_key, attempt_outcome(refreshed, deadline))
+        if recorded_outcome is not None:
+            _record_attempt_safely(db, refresh_key, recorded_outcome)
     result = _to_result(db, standard)
     decision = assess_standard_match(input_code=request.code, input_name=request.name, standard=standard)
     result.match_type = decision.match_type
