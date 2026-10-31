@@ -1,30 +1,31 @@
 # 当前事实快照
 
-- snapshot_id: `2026-10-24-review-deployed`
-- as_of: `2026-10-24T23:45:47+08:00`
+- snapshot_id: `2026-10-31-negative-cache-deployed`
+- as_of: `2026-10-31T09:19:27+08:00`
 - verification: `production_code_deployed_and_domain_verified; live_data_quality_degraded`
 - scope: `qiushanyueyue/guifanbidui` 与 `https://guifan.108923.xyz`
 - evidence_policy: 当前代码/测试和当日只读生产检查分开记录；新证据替代旧数量和部署快照，历史保留在 HISTORY.md。
 
 ## 仓库与部署
 
-- as_of: `2026-10-24T23:45:47+08:00`
+- as_of: `2026-10-31T09:19:27+08:00`
 - verification: `production_code_deployed_and_domain_verified`
 - evidence: GitHub PR/CI/API、Vercel commit status、正式域名只读 API 与真实规范核验。
 
 - [PR #7](https://github.com/qiushanyueyue/guifanbidui/pull/7) 合并为 `c6ae788ae44b4c9a5e8632a1d8c23eba8b660501`；随后 [PR #8](https://github.com/qiushanyueyue/guifanbidui/pull/8) 合并，最终 `main` 为 `6e535f9defee4a476387b5eacbdb26595fa67e8b`。
 - 最终 `main` 的 push CI `40108281983` 中 backend/frontend/postgres-smoke 全部通过；PR #8 同步最新 `main` 后 8 项 CI/Vercel 检查也全部通过。
-- 合并提交的 Vercel 生产部署状态为 success；正式域名首页返回 HTTP 200，正式 API 字段已证明新代码生效。
+- [PR #10](https://github.com/qiushanyueyue/guifanbidui/pull/10) 合并为 `main@20e94da7091f005b05e53f6dc10c9f70bd399bf9`；main push CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过。
+- `main@20e94da` 的 Vercel 生产部署为 `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr`、状态 `READY`；正式域名 `guifan.108923.xyz` 的别名指向该部署。首页及本次验收的四个 API 均返回 HTTP 200。
 - main继续要求三项必过检查、严格最新分支和管理员约束，禁止force-push/删除；CI通过不表示来源批次健康。
 
 ## 数据快照
 
-- as_of: `2026-10-24T23:45:47+08:00`
+- as_of: `2026-10-31T09:19:27+08:00`
 - verification: `production_readonly_verified`
 - evidence: 公网 `/api/stats`、`/api/health`、`/api/sync/status`；本轮未触发同步或写入验收。
 
-- 公开总数1779；1036 current、16 upcoming、137 abolished、590 unknown、0 conflict，最近发布时间 `2026-10-24T07:21:17.079407Z`。
-- status/database=ok，data=degraded，unknown_rate=0.3316、latest_sync_failure_rate=0.0；最近同步 id=62、source=csres、status=success、found=25、inserted=25，samr/mohurd/openstd/soujianzhu 仍为 never。
+- 公开总数1809；1240 current、386 unknown、0 conflict，最近发布时间 `2026-10-30T15:51:39.185094Z`。
+- status/database=ok，data=degraded，unknown_rate=0.2134、latest_sync_failure_rate=0.0；最近同步 id=68、source=csres、status=success、found=25、inserted=25，samr/mohurd/openstd/soujianzhu 仍为 never。
 - 数据质量仍不能称为完全健康；未确认率超过健康阈值。本轮不触发批量同步，不以发布部署代替全库来源治理。
 
 ## 当前行为不变量
@@ -40,16 +41,17 @@
 - WorkBuddy 只读接口不应接收图纸、完整设计说明或内部资料。
 - 2026-10-24 PR #8（`fd51ead`，已随 `main@6e535f9` 部署）：匹配先核编号族/名称身份再给状态；公开 `/api/sync/status` 不含 `error_message`；搜索转义 LIKE 通配符；前端不再用无判定的模糊搜索兜底 verify 未找到。正式 `/api/sync/status` 已实测不含该字段。
 - 2026-10-24 PR #7/#8（已部署）：`/api/v1/verify` 每次请求共享默认8秒联网预算且查询时不重试；`live_lookup_attempts` 负缓存使同一编号/名称24小时内不重复联网，不刷新核验时间；前端20秒请求超时并丢弃过期轮次结果。见 [ADR-0006](decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
+- 2026-10-31 PR #10（已部署）：来源成功但数据库持久化异常或返回空记录时，不把本轮尝试记录为 `found`，下一请求仍可联网重试；每次写负缓存时同事务清理重试窗口外的行，并用 `attempted_at` 索引约束清理成本。
 
-## 2026-10-24 负缓存一致性与清理修正
+## 2026-10-31 负缓存一致性与清理修正
 
-- as_of: `2026-10-24T23:55:00+08:00`
-- verification: `tested_not_deployed`
-- evidence: 后端全量`204 passed`；隔离 SQLite 迁移两次；旧表缺索引升级路径实测补齐索引。
+- as_of: `2026-10-31T09:19:27+08:00`
+- verification: `deployed_and_production_verified`
+- evidence: PR #10、main CI、Vercel Production/READY、正式域名；本地后端全量`204 passed`；隔离 SQLite 迁移两次；旧表缺索引升级路径实测补齐索引。
 
 - 查询时发现或复核得到来源结果后，只有该结果成功写入持久数据库才记录 `found`。持久化抛错或返回空结果时，本轮不写尝试记录，下一请求可以重试。
 - 每次记录尝试时，在同一事务内删除早于 `LIVE_LOOKUP_RETRY_HOURS` 窗口的旧行；`attempted_at` 新增索引，迁移脚本可对已有表补建。
-- 当前生产仍运行 `main@3643871` 的负缓存行为；上述修正只在工作区通过测试，尚未推送或部署。
+- 当前生产运行 `main@20e94da`；该提交已包含上述修正。正式域名对已知规范返回 HTTP 200 且约1.89秒；全新不存在编号第一次约5.40秒，第二次约2.27秒，重复请求未再耗完联网预算。
 
 ## 验证基线
 
@@ -57,10 +59,10 @@
 - verification: `tested_local_and_github_ci`
 - evidence: 后端 pytest、前端 node tests/ESLint/Vite build、隔离 SQLite/PostgreSQL、最终 main CI。
 
-- 2026-10-24 负缓存修正后完整后端 204 项通过；此前前端 18 项、ESLint、Vite build 通过，本轮未改前端。
+- 2026-10-31 负缓存修正后完整后端 204 项通过；此前前端 18 项、ESLint、Vite build 通过，本轮未改前端。
 - 隔离 SQLite 迁移连续两次通过；仓库 seed 的黄金案例 50/50，禁用联网复核。
 - 目录审计 8 项通过，测试使用归档 raw_value 重建临时 Excel。原 7 项 FileNotFoundError 来自过时个人路径，不是业务回归。
-- 最终 main CI `40108281983` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移与 smoke 实际通过。
+- 最终 main CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过；PostgreSQL 迁移与 smoke 实际通过。
 
 ## 2026-10-03 生产回归
 
@@ -78,12 +80,12 @@
 - verification: `mixed`
 - evidence: 最终 main CI、生产只读 API、代码审查。
 
-- 590条unknown仍需来源治理，不能直接转为current；公开健康状态仍为 `degraded`。
+- 386条unknown仍需来源治理，不能直接转为current；公开健康状态仍为 `degraded`。
 - 官方适配器仍是解析框架；本轮不宣称 MOHURD/SAMR/OpenStd 已连通。
 - `RFJ 02-2009`、`DB/T 29-176-2016`、`DB 29-20-2017`、`GB 50046-2018` 仍需更多来源证据。
 - 2026-10-24：查询时联网预算与负缓存已随 PR #7/#8 部署；新表 `live_lookup_attempts` 由 `create_all`/`migrate_v2.py` 增量创建。
 - 2026-10-24实测：CSRES 详情页单次12–20秒、搜索页约3秒。查询时复核已部署为搜索页优先、有剩余预算才查详情页，同批记录1.4–3.0秒完成；搜建筑“真人验证”页按自动化取证不可用处理。人工可在浏览器处理验证，但当前服务端不会复用该人工浏览器会话，因此该来源本次不贡献证据，也不会阻断数据库查询或其他来源比对。
-- 2026-10-24代码审查残留：查询预算不是严格的墙钟总时限。负缓存误记 `found` 与尝试表过期清理已在工作区修复并通过测试，部署前生产仍有旧行为。
+- 2026-10-31代码审查残留：查询预算不是严格的墙钟总时限。负缓存误记 `found` 与尝试表过期清理已随 PR #10 部署并通过正式域名查询验证。
 
 ## 2026-10-24 公开历史凭据风险
 
