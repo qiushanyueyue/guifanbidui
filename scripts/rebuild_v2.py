@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Publish staged evidence and write the machine-readable V2 quality report."""
+"""Publish staged evidence through a quality gate and write the V2 quality report.
+
+The publication is one transaction: if the gate fails, it is rolled back and the
+previously published data stays in place.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +30,24 @@ from app.services.data_quality import validate_relation_edges  # noqa: E402
 from app.sync.v2_pipeline import publish_staging  # noqa: E402
 
 
+def _relation_issues(quality, codes: dict[int, str], relation_texts: dict[tuple[int, int], str | None]) -> dict:
+    """Name the exact edges that failed so they can be fixed without database access."""
+
+    def edge(pair: tuple[int, int]) -> dict:
+        return {
+            "from": codes.get(pair[0], pair[0]),
+            "to": codes.get(pair[1], pair[1]),
+            "raw_relation_text": relation_texts.get(pair),
+        }
+
+    return {
+        "self_relations": [edge(pair) for pair in quality.self_relations],
+        "cycles": [[codes.get(node, node) for node in cycle] for cycle in quality.cycles],
+        "missing_targets": quality.missing_targets,
+        "reverse_chronology": [edge(pair) for pair in quality.reverse_chronology],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default=str(ROOT / "artifacts" / "data_quality_report.json"))
@@ -47,8 +69,8 @@ def main() -> int:
                     if staging is not None and staging.parse_status == "quarantined":
                         staging.parse_status = "pending"
                         staging.parse_error = None
-            db.commit()
-        result = publish_staging(db)
+            db.flush()
+        result = publish_staging(db, commit=False)
         status_counts = dict(
             db.query(StandardV2Model.status, func.count(StandardV2Model.id))
             .group_by(StandardV2Model.status)
@@ -75,7 +97,16 @@ def main() -> int:
                 if row.relation_type in {"replaces", "replaced_by"}
             }
         )
-        standards = db.query(StandardV2Model.id, StandardV2Model.standard_year).all()
+        relation_texts = {}
+        for row in relation_rows:
+            older_first = row.relation_type == "replaces"
+            edge = (
+                row.target_standard_id if older_first else row.source_standard_id,
+                row.source_standard_id if older_first else row.target_standard_id,
+            )
+            relation_texts.setdefault(edge, row.raw_relation_text)
+        standards = db.query(StandardV2Model.id, StandardV2Model.standard_year, StandardV2Model.base_code).all()
+        codes = {row.id: row.base_code for row in standards}
         known_ids = {row.id for row in standards}
         relation_quality = validate_relation_edges(
             edges,
@@ -108,10 +139,17 @@ def main() -> int:
             "parse_failed": db.query(StagingStandardModel).filter(StagingStandardModel.parse_status.in_(["failed", "not_found"])).count(),
             "relations": len(relation_rows),
             "publishable": relation_quality.is_publishable,
+            "publication": "committed" if relation_quality.is_publishable else "rolled_back",
+            "relation_issues": _relation_issues(relation_quality, codes, relation_texts),
         }
+        # Report values above are read first because a rollback discards them.
+        if relation_quality.is_publishable:
+            db.commit()
+        else:
+            db.rollback()
         output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return 0 if relation_quality.is_publishable else 2
+        return 0 if report["publishable"] else 2
 
 
 if __name__ == "__main__":

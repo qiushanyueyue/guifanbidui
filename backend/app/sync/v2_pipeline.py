@@ -218,8 +218,12 @@ def _quarantine(db: Session, row: StagingStandardModel, reason: str, detail: str
     row.parse_error = detail
 
 
-def publish_staging(db: Session) -> PublishReport:
-    """Normalize, deduplicate, reconcile, quarantine, then publish V2 candidates."""
+def publish_staging(db: Session, *, commit: bool = True) -> PublishReport:
+    """Normalize, deduplicate, reconcile, quarantine, then publish V2 candidates.
+
+    With ``commit=False`` the changes are only flushed, so the caller can apply
+    a quality gate and either commit or roll back the whole publication.
+    """
 
     total_raw = db.query(StagingStandardModel).count()
     raw_rows = (
@@ -458,7 +462,10 @@ def publish_staging(db: Session) -> PublishReport:
                             evidence_staging_id=evidence.id,
                         )
                     )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return PublishReport(
         total_raw=total_raw,
         published=published,
