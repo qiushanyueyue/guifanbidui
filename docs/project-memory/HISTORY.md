@@ -294,3 +294,12 @@
 - documentation_followup: PR #11 合并为 `main@1e79fdc`，main CI `41155007592` 与 Vercel 文档部署 `dpl_Fc9pGAgvjfByb5mpnvzwRyHFama5` 成功；仅为部署记录，不改变功能提交 `20e94da` 的运行代码。
 - supersedes: 2026-10-24 条目中的 `tested_not_deployed` 阶段状态和生产旧版本描述。
 - remaining_risk: 8秒联网预算仍是软上限；386条unknown及公开 `data=degraded` 仍需来源治理；公开 Git 历史旧凭据候选仍需先轮换再受控清理。
+
+## 2026-10-31 发布质量门改为提交前生效
+
+- event_id: `2026-10-31-transactional-publish-gate`
+- status: tested
+- scope: `scripts/rebuild_v2.py`、`publish_staging`。决策见 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
+- result: 门禁不通过时整体回滚并退出 2，隔离重试同事务回滚；报告新增 `publication` 与 `relation_issues`。
+- evidence: 复查时每日任务 run 41027984277 报 invalid_relation=2、reverse_chronology=1，而代码先提交后校验。后端全量207项通过（新增3项）；SQLite 种子实际重建 publishable=true、committed，黄金案例50/50。
+- remaining_risk: 未提交、未部署；本地无 PostgreSQL，未在 PostgreSQL 上实测回滚。上线后在2条异常关系修复前，定时发布会被阻塞，这2条的具体内容尚未知。
