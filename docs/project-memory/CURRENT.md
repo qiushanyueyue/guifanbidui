@@ -77,12 +77,12 @@
 
 ## 2026-10-31 发布质量门修正
 
-- as_of: `2026-10-31T15:30:57+08:00`
-- verification: `tested_not_deployed`
-- evidence: 后端全量207项、SQLite 种子实际重建、任务 run 41027984277 日志。
+- as_of: `2026-10-31T15:52:48+08:00`
+- verification: `production_code_deployed; gate_not_yet_exercised_on_postgres`
+- evidence: [PR #13](https://github.com/qiushanyueyue/guifanbidui/pull/13) 合并提交 `e58a6dc`、main CI 与 Vercel 部署状态；任务 run 41027984277 日志。
 
-- 生产仍在运行旧逻辑（先提交后校验），定时任务失败不代表未发布。本地分支已改为校验失败整体回滚，尚未提交或部署。
-- 上线后，2条异常关系（1条为反向年代，具体内容待首次失败日志列出）修复前，定时发布会被阻塞。见 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
+- 校验失败整体回滚的逻辑已合并；定时任务下一次运行起生效，尚未经过真实运行，PostgreSQL 回滚未实测。
+- 2条异常关系（1条为反向年代，具体内容待首次失败日志列出）修复前，定时发布会被阻塞。见 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
 
 ## 当前风险与未验证项
 
