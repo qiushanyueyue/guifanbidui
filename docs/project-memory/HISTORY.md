@@ -291,5 +291,6 @@
 - evidence: main push CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过；本地完整后端 `204 passed`；SQLite 新建及旧表升级各连续迁移两次保持幂等。Vercel 生产部署 `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr` 为 `READY`，commit 为 `20e94da`，正式域名别名指向该部署。
 - production: `/`、`/api/health`、`/api/stats`、`/api/sync/status` 均 HTTP 200；总数1809、1240 current、386 unknown、0 conflict，`data=degraded`，最近同步 id=68 success。`GB 50016-2014` 返回 current、2018年版、`revision_missing` 和正确引用建议，约1.89秒。全新不存在编号第一次约5.40秒，第二次约2.27秒，重复查询未再耗完联网预算。
 - search-architecture note: 搜建筑真人验证页只使该自动化来源在当次不可用，不绕过人机验证，也不阻断数据库结果、其他来源检查或整体比对；人工仍可打开搜索页和规范全文链接处理验证。
+- documentation_followup: PR #11 合并为 `main@1e79fdc`，main CI `41155007592` 与 Vercel 文档部署 `dpl_Fc9pGAgvjfByb5mpnvzwRyHFama5` 成功；仅为部署记录，不改变功能提交 `20e94da` 的运行代码。
 - supersedes: 2026-10-24 条目中的 `tested_not_deployed` 阶段状态和生产旧版本描述。
 - remaining_risk: 8秒联网预算仍是软上限；386条unknown及公开 `data=degraded` 仍需来源治理；公开 Git 历史旧凭据候选仍需先轮换再受控清理。
