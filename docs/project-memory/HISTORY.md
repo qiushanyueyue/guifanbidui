@@ -281,3 +281,15 @@
 - result: 来源结果只有成功持久化后才记录 `found`；持久化异常或返回空结果时不写负缓存，下一请求仍可联网重试。每次写尝试记录时删除重试窗口外的旧行，避免公共输入使表无限增长。
 - evidence: 后端全量 `204 passed`，新增测试覆盖复核持久化失败、发现持久化失败和过期行清理；隔离 SQLite 迁移连续执行两次通过；预建缺少索引的旧 `live_lookup_attempts` 表后再迁移两次，索引 `ix_live_lookup_attempts_attempted_at` 成功补齐。
 - remaining_risk: 尚未推送或部署，生产仍保留旧行为；8 秒联网预算仍是软上限，不由本次改变。
+
+## 2026-10-31 负缓存修正合并与生产部署验收
+
+- event_id: `2026-10-31-negative-cache-deployed`
+- status: deployed_and_production_verified
+- scope: PR #10、`main`、Vercel Production 与正式域名；负缓存持久化顺序、过期清理、索引迁移及重复查询。
+- changes: PR #10 合并为 `20e94da7091f005b05e53f6dc10c9f70bd399bf9`。来源结果只在持久化函数正常返回后记录 `found`；持久化异常或空结果不写尝试记录。每次写尝试同一事务删除重试窗口外行，`attempted_at` 索引由模型及 `migrate_v2.py` 对已有表补齐。
+- evidence: main push CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过；本地完整后端 `204 passed`；SQLite 新建及旧表升级各连续迁移两次保持幂等。Vercel 生产部署 `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr` 为 `READY`，commit 为 `20e94da`，正式域名别名指向该部署。
+- production: `/`、`/api/health`、`/api/stats`、`/api/sync/status` 均 HTTP 200；总数1809、1240 current、386 unknown、0 conflict，`data=degraded`，最近同步 id=68 success。`GB 50016-2014` 返回 current、2018年版、`revision_missing` 和正确引用建议，约1.89秒。全新不存在编号第一次约5.40秒，第二次约2.27秒，重复查询未再耗完联网预算。
+- search-architecture note: 搜建筑真人验证页只使该自动化来源在当次不可用，不绕过人机验证，也不阻断数据库结果、其他来源检查或整体比对；人工仍可打开搜索页和规范全文链接处理验证。
+- supersedes: 2026-10-24 条目中的 `tested_not_deployed` 阶段状态和生产旧版本描述。
+- remaining_risk: 8秒联网预算仍是软上限；386条unknown及公开 `data=degraded` 仍需来源治理；公开 Git 历史旧凭据候选仍需先轮换再受控清理。
