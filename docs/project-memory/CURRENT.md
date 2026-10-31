@@ -14,8 +14,9 @@
 
 - [PR #7](https://github.com/qiushanyueyue/guifanbidui/pull/7) 合并为 `c6ae788ae44b4c9a5e8632a1d8c23eba8b660501`；随后 [PR #8](https://github.com/qiushanyueyue/guifanbidui/pull/8) 合并，最终 `main` 为 `6e535f9defee4a476387b5eacbdb26595fa67e8b`。
 - 最终 `main` 的 push CI `40108281983` 中 backend/frontend/postgres-smoke 全部通过；PR #8 同步最新 `main` 后 8 项 CI/Vercel 检查也全部通过。
-- [PR #10](https://github.com/qiushanyueyue/guifanbidui/pull/10) 合并为 `main@20e94da7091f005b05e53f6dc10c9f70bd399bf9`；main push CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过。
-- `main@20e94da` 的 Vercel 生产部署为 `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr`、状态 `READY`；正式域名 `guifan.108923.xyz` 的别名指向该部署。首页及本次验收的四个 API 均返回 HTTP 200。
+- [PR #10](https://github.com/qiushanyueyue/guifanbidui/pull/10) 的功能提交为 `20e94da7091f005b05e53f6dc10c9f70bd399bf9`；main push CI `41154546399` 的 backend/frontend/postgres-smoke 全部通过。
+- 功能提交的 Vercel 生产部署为 `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr`、状态 `READY`；正式域名验收时别名已指向该部署，首页及本次验收的四个 API 均返回 HTTP 200。
+- [PR #11](https://github.com/qiushanyueyue/guifanbidui/pull/11) 随后合并为文档提交 `main@1e79fdc5dc03a0db14bf44363d63492b9b4b943c`，其 main CI `41155007592` 通过，Vercel 文档部署 `dpl_Fc9pGAgvjfByb5mpnvzwRyHFama5` 为 `READY`。后续仅文档提交可能继续推进 `main` 和 Vercel 部署 ID，但不改变 `20e94da` 的运行代码。
 - main继续要求三项必过检查、严格最新分支和管理员约束，禁止force-push/删除；CI通过不表示来源批次健康。
 
 ## 数据快照
@@ -51,7 +52,7 @@
 
 - 查询时发现或复核得到来源结果后，只有该结果成功写入持久数据库才记录 `found`。持久化抛错或返回空结果时，本轮不写尝试记录，下一请求可以重试。
 - 每次记录尝试时，在同一事务内删除早于 `LIVE_LOOKUP_RETRY_HOURS` 窗口的旧行；`attempted_at` 新增索引，迁移脚本可对已有表补建。
-- 当前生产运行 `main@20e94da`；该提交已包含上述修正。正式域名对已知规范返回 HTTP 200 且约1.89秒；全新不存在编号第一次约5.40秒，第二次约2.27秒，重复请求未再耗完联网预算。
+- 当前生产运行代码由功能提交 `20e94da` 引入；该提交已包含上述修正。正式域名对已知规范返回 HTTP 200 且约1.89秒；全新不存在编号第一次约5.40秒，第二次约2.27秒，重复请求未再耗完联网预算。
 
 ## 验证基线
 

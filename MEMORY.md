@@ -17,7 +17,7 @@
 - CSRES 作为主要覆盖/状态来源、搜建筑辅助、官方公告补充权威变更，见 [ADR-0005](docs/project-memory/decisions/ADR-0005-csres-coverage-and-verification-rotation.md)。本轮修复空结果误报、中文查询编码、全字段表头映射与详情身份校验；日/周 unknown 用独立编号游标轮转，避免队首饥饿。历史证据重放不刷新核验时间，成功重新抓取才刷新。源码/真实抽查通过不等于下一次生产批次已验收。
 - 批量查新已实现最多4条并发，保留逐行结果与错误隔离；前端17项测试/lint/build和本地五条流程通过，9次新鲜缓存API抽测25091ms→8360ms。PR #5已合并，功能de2001c已在Vercel Ready并通过正式页面验收；CI/上线证据见CURRENT，抽样速度不代表过期联网复核。
 - 2026-10-24 PR #7/#8 均已合并，最终 main 为 `6e535f9`，Vercel 生产部署成功且正式域名已验收。verify 联网共享默认8秒预算、查询时不重试；`live_lookup_attempts` 负缓存24小时内不重复联网且不刷新核验时间；前端20秒超时并丢弃过期轮次结果，并补齐匹配身份、接口加固、搜索页优先和仓库清理。见 [ADR-0006](docs/project-memory/decisions/ADR-0006-live-lookup-budget-and-negative-cache.md)。
-- 2026-10-31 PR #10 合并为 `main@20e94da`，Vercel `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr` 为 Production/READY，正式域名已指向该部署。来源结果仅在持久化成功后记录 `found`，持久化失败不写负缓存；写入时清理过期尝试行，并为 `attempted_at` 补索引。后端204项、main CI、正式 API 和重复查新实测通过。
+- 2026-10-31 PR #10 的功能提交为 `20e94da`，Vercel `dpl_6SGVU6u8BaxNBipY4hAVU8Bbehhr` 为 Production/READY，正式域名验收时已指向该部署。来源结果仅在持久化成功后记录 `found`，持久化失败不写负缓存；写入时清理过期尝试行，并为 `attempted_at` 补索引。后端204项、main CI、正式 API 和重复查新实测通过。后续 PR #11 是仅文档提交，可继续推进 `main` 和 Vercel 部署 ID，但不改变运行代码。
 - 版次不得早于规范编号年份；同序号、同年份的 `GB`↔`GB/T` 及“规范”→“标准”作为引用身份演进命中并返回修正建议。
 - `/api/v1/verify` 对生产持久数据库中超过默认 30 天或异常的记录自动有界联网复核；其余列表搜索仍以数据库为主。
 - 官方明确状态直接定案为 `official`；官方不可用时，工标网或搜建筑单源完整匹配且明确状态形成 `single_source`，两站一致升级为 `cross_verified`。编号、名称完整匹配的引用单独显示“完全一致”，不再被未知状态降为“待核验”。
