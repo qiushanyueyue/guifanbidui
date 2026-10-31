@@ -303,3 +303,12 @@
 - result: 门禁不通过时整体回滚并退出 2，隔离重试同事务回滚；报告新增 `publication` 与 `relation_issues`。
 - evidence: 复查时每日任务 run 41027984277 报 invalid_relation=2、reverse_chronology=1，而代码先提交后校验。后端全量207项通过（新增3项）；SQLite 种子实际重建 publishable=true、committed，黄金案例50/50。
 - remaining_risk: 未提交、未部署；本地无 PostgreSQL，未在 PostgreSQL 上实测回滚。上线后在2条异常关系修复前，定时发布会被阻塞，这2条的具体内容尚未知。
+
+## 2026-10-31 发布质量门合并上线
+
+- event_id: `2026-10-31-publish-gate-deployed`
+- status: production_verified
+- scope: [PR #13](https://github.com/qiushanyueyue/guifanbidui/pull/13)，合并提交 `e58a6dc60150b06645bdeedd81444af28a3b5458`。
+- result: main CI 通过，Vercel 生产部署 success；定时任务从 main 取代码，下一次运行起使用新门禁。
+- evidence: GitHub CI/部署状态；公网 health/stats/首页 200，总数1810、unknown 386。
+- remaining_risk: 新门禁尚未经过一次真实定时运行；PostgreSQL 上的回滚未实测；2条异常关系内容待首次失败日志列出，修复前定时发布被阻塞。
