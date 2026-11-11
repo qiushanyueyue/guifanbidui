@@ -75,23 +75,23 @@
 - 页面输入 GB 50009/50010/50011 三条后，完全一致 1、属性修正 2、未找到 0；两条修正仍提示采用 GB/T 与2024年版，没有把 alias 冒充完全一致。
 - 浏览器 error/warn 为0；功能部署限定的验收10分钟窗口无 error/fatal 日志，不能推广为长期无错误。
 
-## 2026-10-31 发布质量门修正
-
-- as_of: `2026-10-31T15:30:57+08:00`
-- verification: `tested_not_deployed`
-- evidence: 后端全量207项、SQLite 种子实际重建、任务 run 41027984277 日志。
-
-- 生产仍在运行旧逻辑（先提交后校验），定时任务失败不代表未发布。本地分支已改为校验失败整体回滚，尚未提交或部署。
-- 上线后，2条异常关系（1条为反向年代，具体内容待首次失败日志列出）修复前，定时发布会被阻塞。见 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
-
 ## 2026-11-11 来源失败与多候选语义
 
-- as_of: `2026-11-11T12:50:13+08:00`
-- verification: `tested_not_deployed`
-- evidence: 后端 224 项、本地直连 CSRES 回归；下游问题清单（2026-11-10）。
+- as_of: `2026-11-11T13:01:17+08:00`
+- verification: `production_code_deployed_and_api_verified`
+- evidence: PR #15（`155ab0b`）、PR #16（`2cabd8e`）main CI 与 Vercel Production；公网 `/api/v1/verify` 抽测。
 
-- `/api/v1/verify` 区分 `source_unavailable`、`ambiguous`、`code_incomplete`、`version_unconfirmed`，来源失败只负缓存 30 分钟；查询时预算 15 秒、前端 30 秒。见 [ADR-0008](decisions/ADR-0008-source-failure-and-ambiguity-semantics.md)。
-- 部署前生产写入的 `miss` 负缓存可能实为来源失败，最多 24 小时后过期。
+- `/api/v1/verify` 区分 `source_unavailable`、`ambiguous`、`code_incomplete`、`version_unconfirmed`；来源失败只负缓存 30 分钟；给了编号时先查引用编号，名称命中只作 `code_mismatch` 兜底；查询时预算 15 秒、前端 30 秒。见 [ADR-0008](decisions/ADR-0008-source-failure-and-ambiguity-semantics.md)。
+- 部署前写入的 `miss` 负缓存可能实为来源失败，2026-11-12 前自然过期。
+
+## 2026-11-11 发布质量门运行状态
+
+- as_of: `2026-11-11T13:01:17+08:00`
+- verification: `production_workflow_logs_verified`
+- evidence: standards-daily run 42794322896 等。
+
+- 质量门（ADR-0007）自 2026-10-31 起生效，每日发布均为 `rolled_back`，定时核验的新证据只暂存。查询时发现与复核仍直接写入公开数据。
+- 阻塞原因：GB 50157-2013 ↔ GB 50157-2003 的环与反向年代，原始文本 `GB 50157-1992; GB 50157-2013` 无方向词被误解析。修复前定时发布持续阻塞。
 
 ## 当前风险与未验证项
 
