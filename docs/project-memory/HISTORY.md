@@ -321,3 +321,22 @@
 - result: 给了编号且编号不在库中时，名称命中若不是该编号（编号族或年份不同），先对引用编号做查询时发现；发现成功则采用，否则才把名称命中作为 `code_mismatch`（顶层 status 为 unknown）返回，来源失败时在 message 注明。
 - evidence: 生产验收（PR #15 部署后）中 `GB/T 14684-2011`+“建筑用砂”因名称先命中库内 2001 版而从未查询 2011 版；新增 3 项回归，后端 228 项通过。
 - remaining_risk: 未部署；部署前生产已写入的同编号 `miss` 负缓存最多 24 小时后过期。
+
+## 2026-11-11 查新语义修复上线与发布阻塞定位
+
+- event_id: `2026-11-11-lookup-semantics-deployed`
+- status: production_verified
+- scope: [PR #15](https://github.com/qiushanyueyue/guifanbidui/pull/15)（`155ab0b`）与 [PR #16](https://github.com/qiushanyueyue/guifanbidui/pull/16)（`2cabd8e`）合并上线；同时补记 [PR #13](https://github.com/qiushanyueyue/guifanbidui/pull/13) 发布质量门的生产运行结果（取代未合并的文档 PR #14）。
+- result: 生产 `/api/v1/verify` 实测：GB 55015/55033/55037、JGJ/T 282、GB 50330、GB/T 50344、GB 50026、JGJ 125 由查不到变为 `code_incomplete` 现行；GB/T 50018、TB 10001、TB 10003 返回 `ambiguous` 与候选；仅名称“建筑用砂”与 CECS 53 返回 `version_unconfirmed`；GB/T 14684-2011+“建筑用砂”先查编号后从 CSRES 发现 2011 版，CSRES 显示为废止；GB 50016-2014、GB 50010-2010 结论不变。
+- evidence: 两次 main CI 与 Vercel Production success；公网首页 200、health ok，总数 1858、unknown 384。
+- finding: 质量门自 2026-10-31 起使每日发布全部回滚（如 run 42794322896 `publication=rolled_back`）。两项异常为同一对：GB 50157-2013 ↔ GB 50157-2003 的环与反向年代，原始关系文本 `GB 50157-1992; GB 50157-2013` 无方向词，被解析为 2003 版替代 2013 版。
+- remaining_risk: GB/T 9286 生产仍返回 `not_found`（3.3 秒、未联网），推测为部署前写入的 `miss` 负缓存，未核实；关系解析修复前定时发布持续被阻塞；88 条完整清单未做前后对比。
+
+## 2026-11-11 修复查询时关系证据丢失方向
+
+- event_id: `2026-11-11-relation-direction`
+- status: tested
+- scope: `persist_live_verification` 的关系证据写入、`publish_staging` 的关系重建。补充 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
+- result: 查询时核验原先把 `replaces` 与 `replaced_by` 用 `"; "` 拼接写入暂存，丢失方向；GB 50157-2003 因此存为 `GB 50157-1992; GB 50157-2013`，重建误判为 2003 版替代 2013 版，自 2026-10-31 起阻塞全部定时发布。现改写为 CSRES 原文格式 `A ;被 B 代替`。对历史上无方向词的查询时暂存行，“替代”目标若晚于本规范年份则不建边、记为 `relation_direction_unknown` 待复核，不推断方向；其他来源的无方向文本仍由质量门拦截。
+- evidence: 后端 231 项通过（新增 4 项）；在种子数据中注入与生产相同的暂存行，旧代码重建 `rolled_back` 且报同一对关系，新代码 `committed`、无环无反向年代。
+- remaining_risk: 未部署；生产库中是否还有其他阻塞项要等下一次定时运行确认。

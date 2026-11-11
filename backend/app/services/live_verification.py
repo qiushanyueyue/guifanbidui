@@ -19,7 +19,7 @@ from app.sources import SourceError, SourceRecord
 from app.sources.base import HttpSource, NotFound, SourceNotConfigured
 from app.sync.orchestrator import _upsert_source_row, build_source
 from app.sync.resolver import resolve_canonical_standard
-from app.sync.v2_pipeline import stage_record
+from app.sync.v2_pipeline import QUERY_TIME_RAW_TEXT, relation_evidence_text, stage_record
 
 OFFICIAL_ORDER = ("mohurd", "samr", "openstd")
 THIRD_PARTY_ORDER = ("csres", "soujianzhu")
@@ -470,11 +470,11 @@ def persist_live_verification(db: Session, standard: object, outcome: LiveVerifi
             raw_name=record.name,
             raw_edition=record.edition,
             raw_status=record.status.value,
-            raw_text="query-time verification",
+            raw_text=QUERY_TIME_RAW_TEXT,
             raw_publish_date=record.publish_date,
             raw_implement_date=record.implement_date,
             raw_abolish_date=record.abolish_date,
-            raw_relation_text="; ".join(filter(None, [record.replaces, record.replaced_by])) or None,
+            raw_relation_text=relation_evidence_text(record.replaces, record.replaced_by),
         )
         staging.parse_status = "ok"
         staging.fetched_at = now

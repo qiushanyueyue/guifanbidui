@@ -197,3 +197,26 @@ def test_two_third_party_sources_must_also_agree_on_name():
         }),
     )
     assert outcome.status == StandardStatus.CONFLICT
+
+
+def test_query_time_persistence_keeps_relation_direction():
+    from app.models.models import StagingStandardModel
+    from app.services.live_verification import persist_live_verification, LiveVerification
+    from app.sources.csres import parse_csres_replacement_text
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    standard = StandardV2Model(
+        code="GB 50157-2003", normalized_code="GB 50157-2003", base_code="GB 50157-2003",
+        standard_prefix="GB", standard_number="50157", standard_year="2003", name="地铁设计规范",
+        normalized_name="地铁设计规范", status="unknown", verification_level="unverified",
+        revision_status="original", mandatory_clause_status="unknown", data_quality_status="publishable",
+    )
+    db.add(standard)
+    db.commit()
+    record = _record("csres", "废止", code="GB 50157-2003", name="地铁设计规范",
+                     replaces="GB 50157-1992", replaced_by="GB 50157-2013")
+    persist_live_verification(db, standard, LiveVerification(StandardStatus.ABOLISHED, VerificationLevel.SINGLE_SOURCE, (record,)))
+    staged = db.query(StagingStandardModel).one()
+    assert parse_csres_replacement_text(staged.raw_relation_text) == (["GB 50157-1992"], ["GB 50157-2013"])

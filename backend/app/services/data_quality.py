@@ -5,6 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+def normalized_year(value: int | str | None) -> int | None:
+    """Four-digit year; two-digit years (GB 50157-92) map to 19xx/20xx."""
+
+    try:
+        year = int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    if year is not None and 0 <= year < 100:
+        return 2000 + year if year <= 30 else 1900 + year
+    return year
+
+
 @dataclass(frozen=True)
 class RelationQualityReport:
     self_relations: list[tuple[int, int]]
@@ -63,15 +75,6 @@ def validate_relation_edges(
     )
     reverse_chronology = []
     if standard_years is not None:
-        def normalized_year(value: int | str | None) -> int | None:
-            try:
-                year = int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
-            if year is not None and 0 <= year < 100:
-                return 2000 + year if year <= 30 else 1900 + year
-            return year
-
         reverse_chronology = sorted({
             (source, target)
             for source, target in edges
