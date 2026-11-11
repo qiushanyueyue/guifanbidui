@@ -67,6 +67,11 @@ class StandardRepo:
         )
 
     @staticmethod
+    def code_candidates(db: Session, code: str) -> list[StandardModel]:
+        """Year-less series lookup exists only for the published V2 dataset."""
+        return []
+
+    @staticmethod
     def search(db: Session, keyword: str, limit: int = 20) -> list[StandardModel]:
         """Search in PostgreSQL/SQLite only, ordered by explicit match priority."""
 

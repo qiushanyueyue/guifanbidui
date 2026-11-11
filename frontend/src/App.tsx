@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, type StandardInfo, type SearchResult, type Stats } from './api';
+import { api, type LookupState, type StandardInfo, type Stats } from './api';
 import { InputSection } from './components/InputSection';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ExportModal } from './components/ExportModal';
@@ -12,7 +12,7 @@ function App() {
   const [isExportOpen, setIsExportOpen] = useState(false);
 
   // Results Map for comparison
-  const [resultsMap, setResultsMap] = useState<Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>>({});
+  const [resultsMap, setResultsMap] = useState<Record<string, LookupState>>({});
   const [stats, setStats] = useState<Stats>({ count: 0, last_updated: null, current: 0, upcoming: 0, abolished: 0, replaced: 0, partially_amended: 0, unknown: 0, conflict: 0 });
   const resultKeys = useRef(new WeakMap<StandardInfo, string>());
   const nextResultKey = useRef(0);
@@ -41,7 +41,7 @@ function App() {
     const key = resultKey || code || name || 'unknown';
     const run = lookupRun.current;
     const { signal } = run.controller;
-    const updateResult = (value: SearchResult | 'loading' | 'error' | 'not_found') => {
+    const updateResult = (value: LookupState) => {
       if (lookupRun.current !== run) return;
       setResultsMap(prev => ({
         ...prev,
@@ -55,7 +55,14 @@ function App() {
       // decision; a second client-side fuzzy search would show a result without one.
       const inputCode = edition ? `${code}（${edition}）` : code;
       const verified = await api.verifyStandard(inputCode, name, signal);
-      updateResult(verified.result ?? 'not_found');
+      if (verified.result) {
+        updateResult(verified.result);
+      } else if (verified.match_type === 'source_unavailable' || verified.match_type === 'ambiguous') {
+        // A source failure or several candidates is not "no such standard".
+        updateResult({ unresolved: true, match_type: verified.match_type, message: verified.message, candidates: verified.candidates ?? [] });
+      } else {
+        updateResult('not_found');
+      }
     } catch {
       updateResult('error');
     }

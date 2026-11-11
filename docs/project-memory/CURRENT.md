@@ -84,6 +84,15 @@
 - 生产仍在运行旧逻辑（先提交后校验），定时任务失败不代表未发布。本地分支已改为校验失败整体回滚，尚未提交或部署。
 - 上线后，2条异常关系（1条为反向年代，具体内容待首次失败日志列出）修复前，定时发布会被阻塞。见 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
 
+## 2026-11-11 来源失败与多候选语义
+
+- as_of: `2026-11-11T12:50:13+08:00`
+- verification: `tested_not_deployed`
+- evidence: 后端 224 项、本地直连 CSRES 回归；下游问题清单（2026-11-10）。
+
+- `/api/v1/verify` 区分 `source_unavailable`、`ambiguous`、`code_incomplete`、`version_unconfirmed`，来源失败只负缓存 30 分钟；查询时预算 15 秒、前端 30 秒。见 [ADR-0008](decisions/ADR-0008-source-failure-and-ambiguity-semantics.md)。
+- 部署前生产写入的 `miss` 负缓存可能实为来源失败，最多 24 小时后过期。
+
 ## 当前风险与未验证项
 
 - as_of: `2026-10-24T23:45:47+08:00`

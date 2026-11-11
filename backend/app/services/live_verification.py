@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +16,7 @@ from app.repositories.standard_repo import StandardRepo
 from app.repositories.standard_v2_repo import StandardV2Repo
 from app.services.standard_normalizer import normalize_standard_code, normalized_name, parse_standard_code
 from app.sources import SourceError, SourceRecord
-from app.sources.base import HttpSource
+from app.sources.base import HttpSource, NotFound, SourceNotConfigured
 from app.sync.orchestrator import _upsert_source_row, build_source
 from app.sync.resolver import resolve_canonical_standard
 from app.sync.v2_pipeline import stage_record
@@ -31,6 +31,24 @@ class LiveVerification:
     verification_level: VerificationLevel
     records: tuple[SourceRecord, ...]
     source_conflict: bool = False
+
+
+@dataclass
+class LookupTrace:
+    """Source failures seen during one live lookup, kept apart from "no record"."""
+
+    failures: list[str] = field(default_factory=list)
+    # Codes of several standards matching a year-less citation; none was chosen.
+    ambiguous: list[str] = field(default_factory=list)
+
+    def note(self, source_name: str, error: Exception) -> None:
+        self.failures.append(f"{source_name}:{getattr(error, 'category', type(error).__name__)}")
+
+
+# A failed or unfinished lookup proves nothing about the standard, so it is only
+# held back briefly; a completed lookup that found nothing (or found several
+# versions of a year-less citation) waits the long window.
+FAILURE_OUTCOMES = frozenset({"source_unavailable", "budget_exhausted"})
 
 
 def freshness_days() -> int:
@@ -51,9 +69,9 @@ def live_refresh_enabled() -> bool:
 
 def live_budget_seconds() -> float:
     try:
-        return max(1.0, float(os.getenv("LIVE_LOOKUP_BUDGET_SECONDS", "8")))
+        return max(1.0, float(os.getenv("LIVE_LOOKUP_BUDGET_SECONDS", "15")))
     except ValueError:
-        return 8.0
+        return 15.0
 
 
 def live_retry_hours() -> float:
@@ -61,6 +79,19 @@ def live_retry_hours() -> float:
         return max(0.0, float(os.getenv("LIVE_LOOKUP_RETRY_HOURS", "24")))
     except ValueError:
         return 24.0
+
+
+def live_failure_retry_minutes() -> float:
+    try:
+        return max(0.0, float(os.getenv("LIVE_LOOKUP_FAILURE_RETRY_MINUTES", "30")))
+    except ValueError:
+        return 30.0
+
+
+def retry_window(outcome: str | None) -> timedelta:
+    if outcome in FAILURE_OUTCOMES:
+        return timedelta(minutes=live_failure_retry_minutes())
+    return timedelta(hours=live_retry_hours())
 
 
 def lookup_deadline() -> float:
@@ -75,21 +106,29 @@ def lookup_key(*, code: str | None, name: str | None = None) -> str | None:
     return f"name:{wanted_name}" if wanted_name else None
 
 
-def recently_attempted(db: Session, key: str | None, *, now: datetime | None = None) -> bool:
-    """Skip repeated live lookups that recently produced no definitive result."""
+def recent_attempt(db: Session, key: str | None, *, now: datetime | None = None) -> str | None:
+    """Return the outcome of a lookup still inside its retry window, else None."""
 
     if key is None:
-        return False
+        return None
     try:
         attempt = db.query(LiveLookupAttemptModel).filter_by(lookup_key=key).first()
     except SQLAlchemyError:
         # A not-yet-migrated attempts table must not break the lookup itself.
         db.rollback()
-        return False
+        return None
     if attempt is None:
-        return False
+        return None
     reference = now or datetime.now(UTC).replace(tzinfo=None)
-    return attempt.attempted_at >= reference - timedelta(hours=live_retry_hours())
+    if attempt.attempted_at >= reference - retry_window(attempt.outcome):
+        return attempt.outcome
+    return None
+
+
+def recently_attempted(db: Session, key: str | None, *, now: datetime | None = None) -> bool:
+    """Skip repeated live lookups that recently produced no definitive result."""
+
+    return recent_attempt(db, key, now=now) is not None
 
 
 def record_attempt(db: Session, key: str | None, outcome: str, *, now: datetime | None = None) -> None:
@@ -105,19 +144,36 @@ def record_attempt(db: Session, key: str | None, outcome: str, *, now: datetime 
     attempt.attempted_at = reference
     attempt.outcome = outcome
     db.flush()
-    cutoff = reference - timedelta(hours=live_retry_hours())
+    # Keep every row that any outcome's window could still use.
+    cutoff = reference - max(retry_window("miss"), retry_window("source_unavailable"))
     db.query(LiveLookupAttemptModel).filter(
         LiveLookupAttemptModel.attempted_at < cutoff
     ).delete(synchronize_session=False)
     db.commit()
 
 
-def attempt_outcome(result: LiveVerification | None, deadline: float | None) -> str:
+def attempt_outcome(
+    result: LiveVerification | None,
+    deadline: float | None,
+    trace: LookupTrace | None = None,
+) -> str:
+    """Only a lookup where every queried source answered may be recorded as a miss."""
+
     if result is not None:
         return "found"
+    if trace is not None and trace.ambiguous:
+        return "ambiguous"
     if deadline is not None and time.monotonic() >= deadline:
         return "budget_exhausted"
+    if trace is not None and trace.failures:
+        return "source_unavailable"
     return "miss"
+
+
+def _skippable(error: Exception) -> bool:
+    # Not-configured adapters were never queried and a missing detail page is an
+    # answer ("not there"); neither is a source failure.
+    return isinstance(error, (SourceNotConfigured, NotFound, NotImplementedError))
 
 
 def _bounded_adapter(source_name: str, factory, deadline: float | None):
@@ -156,6 +212,7 @@ def _fetch_one(
     source_urls: dict[str, str],
     factory,
     deadline: float | None = None,
+    trace: LookupTrace | None = None,
 ) -> SourceRecord | None:
     adapter = _bounded_adapter(source_name, factory, deadline)
     url = source_urls.get(source_name)
@@ -175,7 +232,9 @@ def _fetch_one(
                 records = adapter.search(str(getattr(standard, "code", "")))
             else:
                 records = [adapter.fetch_detail(url)]
-        except (SourceError, NotImplementedError):
+        except (SourceError, NotImplementedError) as exc:
+            if trace is not None and not _skippable(exc):
+                trace.note(source_name, exc)
             continue
         for record in records:
             if record is None:
@@ -213,17 +272,18 @@ def verify_live(
     source_urls: dict[str, str] | None = None,
     factory=build_source,
     deadline: float | None = None,
+    trace: LookupTrace | None = None,
 ) -> LiveVerification | None:
     urls = source_urls or {}
     for source_name in OFFICIAL_ORDER:
-        record = _fetch_one(source_name, standard, urls, factory, deadline)
+        record = _fetch_one(source_name, standard, urls, factory, deadline, trace)
         if record is not None:
             return LiveVerification(record.status, VerificationLevel.OFFICIAL, (record,))
 
     records = tuple(
         record
         for source_name in THIRD_PARTY_ORDER
-        if (record := _fetch_one(source_name, standard, urls, factory, deadline)) is not None
+        if (record := _fetch_one(source_name, standard, urls, factory, deadline, trace)) is not None
     )
     return _combine_third_party(records)
 
@@ -246,6 +306,10 @@ def _discovery_match(record: SourceRecord, *, code: str | None, name: str | None
         _code_family(record.normalized_code) == wanted_family
     )
     same_name = bool(wanted_name) and normalized_name(record.name) == wanted_name
+    if wanted_code and wanted_family[0] and wanted_family[2] is None:
+        # Year-less citation: any year of the same series is a candidate; the
+        # caller accepts it only if the source lists exactly one standard.
+        return _code_family(record.normalized_code)[:2] == wanted_family[:2]
     if wanted_code:
         # The exact serial/year identity remains valid when a partial revision
         # changes GB to GB/T and renames “规范” to “标准”. The matcher
@@ -261,18 +325,28 @@ def _discover_one(
     name: str | None,
     factory,
     deadline: float | None = None,
+    trace: LookupTrace | None = None,
 ) -> SourceRecord | None:
     adapter = _bounded_adapter(source_name, factory, deadline)
     queries = tuple(dict.fromkeys(item for item in (code, name) if item and item.strip()))
     for query in queries:
         try:
             records = adapter.search(query)
-        except (SourceError, NotImplementedError):
+        except (SourceError, NotImplementedError) as exc:
+            if trace is not None and not _skippable(exc):
+                trace.note(source_name, exc)
             continue
         normalized_records = [adapter.normalize(record) for record in records if record is not None]
         candidates = [
             record for record in normalized_records if _discovery_match(record, code=code, name=name)
         ]
+        if candidates and _code_family(code)[0] and _code_family(code)[2] is None:
+            codes = sorted({record.normalized_code for record in candidates})
+            if len(codes) != 1:
+                # Several years of the series: choosing one would guess a version.
+                if trace is not None:
+                    trace.ambiguous.extend(code for code in codes if code not in trace.ambiguous)
+                continue
         if candidates:
             candidates.sort(key=lambda record: record.normalized_code != normalize_standard_code(code))
             return candidates[0]
@@ -285,17 +359,18 @@ def discover_live(
     name: str | None,
     factory=build_source,
     deadline: float | None = None,
+    trace: LookupTrace | None = None,
 ) -> LiveVerification | None:
     """Find a missing local record from bounded live metadata queries."""
 
     for source_name in OFFICIAL_ORDER:
-        record = _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline)
+        record = _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline, trace=trace)
         if record is not None:
             return LiveVerification(record.status, VerificationLevel.OFFICIAL, (record,))
     records = tuple(
         record
         for source_name in THIRD_PARTY_ORDER
-        if (record := _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline)) is not None
+        if (record := _discover_one(source_name, code=code, name=name, factory=factory, deadline=deadline, trace=trace)) is not None
     )
     return _combine_third_party(records)
 

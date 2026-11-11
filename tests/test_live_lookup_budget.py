@@ -156,7 +156,7 @@ def test_unresolved_standard_is_not_refreshed_again_within_retry_window(monkeypa
     db.commit()
     calls = []
 
-    def fake_verify_live(standard, *, source_urls=None, deadline=None):
+    def fake_verify_live(standard, *, source_urls=None, deadline=None, trace=None):
         calls.append(deadline)
         return None
 
@@ -184,7 +184,7 @@ def test_missing_code_discovery_is_not_repeated_within_retry_window(monkeypatch,
     db.commit()
     calls = []
 
-    def fake_discover_live(*, code, name, deadline=None):
+    def fake_discover_live(*, code, name, deadline=None, trace=None):
         calls.append(code)
         return None
 

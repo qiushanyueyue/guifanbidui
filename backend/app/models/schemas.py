@@ -148,6 +148,8 @@ class VerifyResponse(BaseModel):
     recommended_citation: str = ""
     message: str = ""
     result: Optional[SearchResult] = None
+    # Set with match_type "ambiguous": the library holds several possible standards.
+    candidates: List[SearchResult] = Field(default_factory=list)
 
 
 class SyncStatusResponse(BaseModel):

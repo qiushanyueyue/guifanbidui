@@ -37,8 +37,26 @@ class StandardV2Repo:
 
     @classmethod
     def get_by_code(cls, db: Session, code: str) -> StandardV2Model | None:
-        matches = cls._code_matches(db, code, limit=1)
-        return matches[0] if matches else None
+        matches = cls._code_matches(db, code, limit=20)
+        if not matches:
+            return None
+        parsed = parse_standard_code(code)
+        # A citation without a year names a series, not a version: pick it only
+        # when the library holds exactly one standard of that series.
+        if parsed is not None and not parsed.year and len({row.base_code for row in matches}) > 1:
+            return None
+        return matches[0]
+
+    @classmethod
+    def code_candidates(cls, db: Session, code: str) -> list[StandardV2Model]:
+        """One row per standard for a year-less code; empty when the code has a year."""
+        parsed = parse_standard_code(code)
+        if parsed is None or parsed.year:
+            return []
+        candidates: dict[str, StandardV2Model] = {}
+        for row in cls._code_matches(db, code, limit=50):
+            candidates.setdefault(row.base_code, row)
+        return sorted(candidates.values(), key=lambda row: row.standard_year or "", reverse=True)
 
     @classmethod
     def _code_matches(cls, db: Session, code: str, limit: int) -> list[StandardV2Model]:
@@ -52,6 +70,16 @@ class StandardV2Repo:
                 StandardV2Model.standard_prefix == ("GB/T" if parsed.prefix == "GB" else "GB"),
                 StandardV2Model.standard_number == parsed.serial,
                 StandardV2Model.standard_year == parsed.year,
+            ))
+        if parsed is not None and not parsed.year:
+            # Year-less citations ("GB 55015") match the series by prefix and
+            # serial; callers decide whether the series is unambiguous.
+            prefixes = {parsed.prefix}
+            if parsed.prefix in {"GB", "GB/T"}:
+                prefixes |= {"GB", "GB/T"}
+            queries.append(cls._published(db).filter(
+                StandardV2Model.standard_prefix.in_(prefixes),
+                StandardV2Model.standard_number == parsed.serial,
             ))
         queries = [query.order_by(
             StandardV2Model.last_verified_at.desc().nullslast(),

@@ -303,3 +303,12 @@
 - result: 门禁不通过时整体回滚并退出 2，隔离重试同事务回滚；报告新增 `publication` 与 `relation_issues`。
 - evidence: 复查时每日任务 run 41027984277 报 invalid_relation=2、reverse_chronology=1，而代码先提交后校验。后端全量207项通过（新增3项）；SQLite 种子实际重建 publishable=true、committed，黄金案例50/50。
 - remaining_risk: 未提交、未部署；本地无 PostgreSQL，未在 PostgreSQL 上实测回滚。上线后在2条异常关系修复前，定时发布会被阻塞，这2条的具体内容尚未知。
+
+## 2026-11-11 查新区分来源失败、确实没有与多候选
+
+- event_id: `2026-11-11-source-failure-semantics`
+- status: tested
+- scope: 依据下游问题清单（证据时间 2026-11-10）修复查询时发现、负缓存、编号缺年份匹配、名称回退与匹配判定、CSRES 搜索解析。决策见 [ADR-0008](decisions/ADR-0008-source-failure-and-ambiguity-semantics.md)。
+- result: 来源失败记为 `source_unavailable`（30 分钟窗口）并对外返回同名 `match_type`；编号缺年份唯一时 `code_incomplete`、多候选 `ambiguous`；只给名称或缺年份命中已停用且无替代信息的记录时 `version_unconfirmed`；CSRES 图书行跳过。预算 8→15 秒，前端超时 20→30 秒。
+- evidence: 后端 224 项通过（新增 17 项）、黄金案例 50/50、前端 18 项/lint/tsc/build。本地服务直连 CSRES：GB 55015/55033、JGJ/T 282、GB 50330、GB/T 50344 由“查不到”变为 `code_incomplete` 现行；TB 10001、GB/T 9286 返回来源中的 3 个版本；仅名称“建筑用砂”与 CECS 53 返回 `version_unconfirmed`；GB/T 14684-2011 因图书行导致的 parse_error 修复后可发现，CSRES 显示其为废止（与清单“现行”的说法不一致）。
+- remaining_risk: 未在生产验证；88 条完整清单与 NAS 本地实例不可访问，未做前后对比；清单中的 `UPSTREAM_VERIFY_URL` 不在本仓库；NAS 库状态回填属运维，未处理。

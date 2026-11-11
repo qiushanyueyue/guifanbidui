@@ -49,6 +49,8 @@ from app.services.standard_matcher import assess_standard_match
 from app.services.business_conclusion import business_conclusion
 from app.services.live_verification import (
     attempt_outcome,
+    FAILURE_OUTCOMES,
+    LookupTrace,
     cache_is_fresh,
     discover_live,
     live_refresh_enabled,
@@ -56,10 +58,11 @@ from app.services.live_verification import (
     lookup_key,
     persist_discovered_standard,
     persist_live_verification,
-    recently_attempted,
+    recent_attempt,
     record_attempt,
     verify_live,
 )
+from app.services.standard_normalizer import normalized_name, parse_standard_code
 from app.sources.soujianzhu import canonical_soujianzhu_full_text_url
 
 logger = logging.getLogger(__name__)
@@ -437,63 +440,141 @@ def _record_attempt_safely(db: Session, key: str | None, outcome: str) -> None:
         logger.exception("could not record live lookup attempt key=%s", key)
 
 
+# The matched record is a different standard or an unconfirmed version, so its
+# status must not be presented as the cited standard's status.
+_STATUS_NOT_TRANSFERABLE = frozenset({"code_mismatch", "version_unconfirmed"})
+
+
+def _distinct_standards(rows) -> list:
+    seen: dict[str, object] = {}
+    for row in rows:
+        seen.setdefault(getattr(row, "base_code", None) or row.normalized_code or row.code, row)
+    return list(seen.values())
+
+
+def _series(code: str | None) -> tuple[str, str] | None:
+    parsed = parse_standard_code(code)
+    return (parsed.prefix.replace("/T", ""), parsed.serial) if parsed is not None else None
+
+
+def _resolve_local(db: Session, repo, request: VerifyRequest):
+    """Return (standard, candidates); candidates are set only when the choice is ambiguous."""
+
+    standard = repo.get_by_code(db, request.code) if request.code else None
+    if standard is not None:
+        return standard, []
+    wanted_name = normalized_name(request.name)
+    series = repo.code_candidates(db, request.code) if request.code else []
+    if len(series) > 1:
+        named = [row for row in series if wanted_name and normalized_name(row.name) == wanted_name]
+        return (named[0], []) if len(named) == 1 else (None, series)
+    if not request.name:
+        return None, []
+    matches = _distinct_standards(repo.search(db, request.name, limit=5))
+    if len(matches) <= 1:
+        return (matches[0] if matches else None), []
+    wanted_series = _series(request.code)
+    if wanted_series is not None:
+        same_series = [row for row in matches if _series(row.normalized_code or row.code) == wanted_series]
+        # With a code the matcher reports any identity difference, so the first
+        # name hit stays acceptable when the series does not single one out.
+        return (same_series[0] if len(same_series) == 1 else matches[0]), []
+    return None, matches
+
+
+def _unresolved_response(request: VerifyRequest, match_type: str, message: str, candidates=()) -> VerifyResponse:
+    return VerifyResponse(
+        input_code=request.code,
+        status=StandardStatus.UNKNOWN,
+        match_type=match_type,
+        message=message,
+        candidates=list(candidates),
+    )
+
+
+def _live_lookup(db: Session, key: str | None, run, trace: LookupTrace | None = None) -> str | None:
+    """Run one bounded live lookup unless a recent attempt still applies; return its outcome."""
+
+    cached = recent_attempt(db, key)
+    if cached is not None:
+        return cached
+    trace = trace if trace is not None else LookupTrace()
+    try:
+        outcome = run(trace)
+    except Exception:
+        # Internal failures (e.g. persistence) are neither a source failure nor
+        # a miss; nothing is cached so the next request retries.
+        db.rollback()
+        logger.exception("query-time live lookup failed for key=%s", key)
+        return None
+    if outcome is not None:
+        _record_attempt_safely(db, key, outcome)
+        if trace.failures:
+            logger.warning("query-time live lookup key=%s outcome=%s failures=%s", key, outcome, trace.failures)
+    return outcome
+
+
 @router.post("/v1/verify", response_model=VerifyResponse)
 def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     repo = _repo(db)
-    standard = repo.get_by_code(db, request.code)
-    if standard is None and request.name:
-        matches = repo.search(db, request.name, limit=1)
-        standard = matches[0] if matches else None
+    standard, candidates = _resolve_local(db, repo, request)
+    if candidates:
+        listing = "、".join(f"{row.code}（{status_label(normalize_status(row.status))}）" for row in candidates)
+        return _unresolved_response(
+            request, "ambiguous", f"库中有多个可能的规范：{listing}，请补充完整编号确认",
+            [_to_result(db, row) for row in candidates],
+        )
     # One request-wide budget keeps discovery and refresh inside the platform
     # timeout; the attempt table stops unresolved codes re-querying sources.
     deadline = lookup_deadline()
-    discovery_key = lookup_key(code=request.code, name=request.name)
-    if standard is None and live_refresh_enabled() and not recently_attempted(db, discovery_key):
-        discovered = None
-        recorded_outcome = None
-        try:
-            discovered = discover_live(code=request.code, name=request.name, deadline=deadline)
+    discovery_outcome = None
+    discovery_trace = LookupTrace()
+    if standard is None and live_refresh_enabled():
+        discovered_holder: list = []
+
+        def discover(trace: LookupTrace) -> str | None:
+            discovered = discover_live(code=request.code, name=request.name, deadline=deadline, trace=trace)
             if discovered is None:
-                recorded_outcome = attempt_outcome(None, deadline)
-            else:
-                standard = persist_discovered_standard(db, discovered, use_v2=repo is StandardV2Repo)
-                if standard is not None:
-                    recorded_outcome = attempt_outcome(discovered, deadline)
-        except Exception:
-            db.rollback()
-            logger.exception("query-time discovery failed for code=%s", request.code)
-        if recorded_outcome is not None:
-            _record_attempt_safely(db, discovery_key, recorded_outcome)
-    if standard is None:
-        return VerifyResponse(
-            input_code=request.code,
-            status=StandardStatus.UNKNOWN,
-            match_type="not_found",
-            message="本地规范库未找到匹配记录",
+                return attempt_outcome(None, deadline, trace)
+            persisted = persist_discovered_standard(db, discovered, use_v2=repo is StandardV2Repo)
+            if persisted is None:
+                return None
+            discovered_holder.append(persisted)
+            return attempt_outcome(discovered, deadline, trace)
+
+        discovery_outcome = _live_lookup(
+            db, lookup_key(code=request.code, name=request.name), discover, discovery_trace,
         )
-    refresh_key = lookup_key(code=standard.normalized_code or standard.code)
-    if live_refresh_enabled() and not cache_is_fresh(standard) and not recently_attempted(db, refresh_key):
+        standard = discovered_holder[0] if discovered_holder else None
+    if standard is None:
+        if discovery_outcome == "ambiguous":
+            listing = "、".join(discovery_trace.ambiguous) or "多个年份版本"
+            return _unresolved_response(
+                request, "ambiguous", f"来源中有多个可能的规范：{listing}，请补充完整编号确认",
+            )
+        if discovery_outcome in FAILURE_OUTCOMES:
+            return _unresolved_response(
+                request, "source_unavailable", "来源暂时不可用或查询超时，未能确认该规范是否存在，请稍后重试",
+            )
+        return _unresolved_response(request, "not_found", "本地规范库未找到匹配记录")
+    if live_refresh_enabled() and not cache_is_fresh(standard):
         source_urls = {
             source.source_name: source.source_url
             for source in repo.sources_for(db, standard.id)
             if source.source_url
         }
-        refreshed = None
-        recorded_outcome = None
-        try:
-            refreshed = verify_live(standard, source_urls=source_urls, deadline=deadline)
-            if refreshed is None:
-                recorded_outcome = attempt_outcome(None, deadline)
-            else:
+
+        def refresh(trace: LookupTrace) -> str | None:
+            refreshed = verify_live(standard, source_urls=source_urls, deadline=deadline, trace=trace)
+            if refreshed is not None:
                 persist_live_verification(db, standard, refreshed)
-                recorded_outcome = attempt_outcome(refreshed, deadline)
-        except Exception:
-            db.rollback()
-            logger.exception("query-time verification failed for standard_id=%s", standard.id)
-        if recorded_outcome is not None:
-            _record_attempt_safely(db, refresh_key, recorded_outcome)
+            return attempt_outcome(refreshed, deadline, trace)
+
+        _live_lookup(db, lookup_key(code=standard.normalized_code or standard.code), refresh)
     result = _to_result(db, standard)
-    decision = assess_standard_match(input_code=request.code, input_name=request.name, standard=standard)
+    decision = assess_standard_match(
+        input_code=request.code, input_name=request.name, standard=standard, replaced_by=result.replaced_by,
+    )
     result.match_type = decision.match_type
     result.confidence = decision.confidence
     result.recommended_citation = decision.recommended_citation
@@ -502,7 +583,7 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
         input_code=request.code,
         canonical_code=result.normalized_code or result.code,
         name=result.name,
-        status=result.status,
+        status=StandardStatus.UNKNOWN if decision.match_type in _STATUS_NOT_TRANSFERABLE else result.status,
         current_edition=result.edition,
         replaced_by=result.replaced_by,
         publish_date=result.publish_date,

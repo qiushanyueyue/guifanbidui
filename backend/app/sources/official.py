@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from app.sources.base import HttpSource, SourceRecord, SourceUnavailable
+from app.sources.base import HttpSource, SourceNotConfigured, SourceRecord, SourceUnavailable
 
 
 class ConfiguredOfficialSource(HttpSource):
@@ -19,19 +19,19 @@ class ConfiguredOfficialSource(HttpSource):
     def _endpoint(self) -> str:
         endpoint = os.getenv(self.endpoint_env, "").strip()
         if not endpoint:
-            raise SourceUnavailable(
+            raise SourceNotConfigured(
                 f"{self.endpoint_env} is not configured for {self.name}", source=self.name
             )
         return endpoint
 
     def search(self, query: str) -> list[SourceRecord]:
-        raise SourceUnavailable(
+        raise SourceNotConfigured(
             f"{self.name} search parser is not configured; use the scheduled recent endpoint",
             source=self.name,
         )
 
     def fetch_detail(self, url: str) -> SourceRecord | None:
-        raise SourceUnavailable(
+        raise SourceNotConfigured(
             f"{self.name} detail parser is not configured", source=self.name, url=url
         )
 

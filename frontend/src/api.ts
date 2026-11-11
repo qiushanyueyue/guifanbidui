@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// The backend caps query-time live lookups at about 8 s; leave headroom for
+// The backend caps query-time live lookups at about 15 s; leave headroom for
 // database work while still failing visibly instead of hanging forever.
-export const REQUEST_TIMEOUT_MS = 20_000;
+export const REQUEST_TIMEOUT_MS = 30_000;
 export const EXPORT_TIMEOUT_MS = 60_000;
 
 const http = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
@@ -69,17 +69,40 @@ export interface SearchResult {
     document_kind?: string | null;
 }
 
-export type MatchType = 'exact' | 'revision_missing' | 'code_type_mismatch' | 'code_mismatch' | 'name_mismatch' | 'obsolete' | 'replaced' | 'unknown' | 'not_found' | 'source_conflict';
+export type MatchType = 'exact' | 'revision_missing' | 'code_type_mismatch' | 'code_mismatch' | 'name_mismatch' | 'obsolete' | 'replaced' | 'unknown' | 'not_found' | 'source_conflict'
+    | 'code_incomplete' | 'version_unconfirmed' | 'ambiguous' | 'source_unavailable';
 
 export interface VerifyResponse {
     input_code: string;
     canonical_code?: string | null;
+    status?: StandardStatus;
     match_type: MatchType;
     confidence: number;
     recommended_citation: string;
     message: string;
     result?: SearchResult | null;
+    candidates?: SearchResult[];
 }
+
+// The matched record is another standard or an unconfirmed version: its own status
+// must not be shown as the cited standard's status.
+export const STATUS_NOT_TRANSFERABLE: MatchType[] = ['code_mismatch', 'version_unconfirmed'];
+
+// No single record: the source failed, or several candidates need a human choice.
+export interface UnresolvedLookup {
+    unresolved: true;
+    match_type: MatchType;
+    message: string;
+    candidates: SearchResult[];
+}
+
+export type LookupState = SearchResult | UnresolvedLookup | null | 'loading' | 'error' | 'not_found';
+
+export const isMatchedResult = (value: LookupState | undefined): value is SearchResult =>
+    typeof value === 'object' && value !== null && !('unresolved' in value);
+
+export const isUnresolvedLookup = (value: LookupState | undefined): value is UnresolvedLookup =>
+    typeof value === 'object' && value !== null && 'unresolved' in value;
 
 export interface SourceInfo {
     name: string;

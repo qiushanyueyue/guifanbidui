@@ -37,6 +37,12 @@ class SourceUnavailable(SourceError):
     category = "source_unavailable"
 
 
+class SourceNotConfigured(SourceUnavailable):
+    """The adapter has no endpoint or parser in this deployment; it was never queried."""
+
+    category = "not_configured"
+
+
 class ParseError(SourceError):
     category = "parse_error"
 
