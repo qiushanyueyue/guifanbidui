@@ -312,3 +312,12 @@
 - result: 来源失败记为 `source_unavailable`（30 分钟窗口）并对外返回同名 `match_type`；编号缺年份唯一时 `code_incomplete`、多候选 `ambiguous`；只给名称或缺年份命中已停用且无替代信息的记录时 `version_unconfirmed`；CSRES 图书行跳过。预算 8→15 秒，前端超时 20→30 秒。
 - evidence: 后端 224 项通过（新增 17 项）、黄金案例 50/50、前端 18 项/lint/tsc/build。本地服务直连 CSRES：GB 55015/55033、JGJ/T 282、GB 50330、GB/T 50344 由“查不到”变为 `code_incomplete` 现行；TB 10001、GB/T 9286 返回来源中的 3 个版本；仅名称“建筑用砂”与 CECS 53 返回 `version_unconfirmed`；GB/T 14684-2011 因图书行导致的 parse_error 修复后可发现，CSRES 显示其为废止（与清单“现行”的说法不一致）。
 - remaining_risk: 未在生产验证；88 条完整清单与 NAS 本地实例不可访问，未做前后对比；清单中的 `UPSTREAM_VERIFY_URL` 不在本仓库；NAS 库状态回填属运维，未处理。
+
+## 2026-11-11 先查引用编号，名称只作兜底
+
+- event_id: `2026-11-11-code-before-name-fallback`
+- status: tested
+- scope: `/api/v1/verify` 的名称回退顺序（ADR-0008 的补充）。
+- result: 给了编号且编号不在库中时，名称命中若不是该编号（编号族或年份不同），先对引用编号做查询时发现；发现成功则采用，否则才把名称命中作为 `code_mismatch`（顶层 status 为 unknown）返回，来源失败时在 message 注明。
+- evidence: 生产验收（PR #15 部署后）中 `GB/T 14684-2011`+“建筑用砂”因名称先命中库内 2001 版而从未查询 2011 版；新增 3 项回归，后端 228 项通过。
+- remaining_risk: 未部署；部署前生产已写入的同编号 `miss` 负缓存最多 24 小时后过期。

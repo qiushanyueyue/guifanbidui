@@ -308,3 +308,49 @@ def test_name_only_with_several_different_standards_is_ambiguous(live, monkeypat
     response = endpoints.verify_standard(VerifyRequest(code="", name="某技术规程"), db)
     assert response.match_type == "ambiguous"
     assert len(response.candidates) == 2
+
+
+# --- code first, name only as a fallback ---------------------------------------
+
+
+def _old_sand_db():
+    db = _db()
+    db.add(_v2("GB/T 14684-2001", "建筑用砂", status="abolished", standard_prefix="GB/T", base_code="GB/T 14684-2001"))
+    db.commit()
+    return db
+
+
+def test_cited_code_is_looked_up_before_using_a_name_hit_on_another_version(live, monkeypatch):
+    db = _old_sand_db()
+    csres = Source(records=[_record("GB/T 14684-2011", "建设用砂", "废止")])
+    monkeypatch.setattr(
+        endpoints, "discover_live",
+        lambda **kwargs: discover_live(factory=_factory(csres=csres), **kwargs),
+    )
+    response = endpoints.verify_standard(VerifyRequest(code="GB/T 14684-2011", name="建筑用砂"), db)
+    assert response.canonical_code == "GB/T 14684-2011"
+    assert csres.queries[0] == "GB/T 14684-2011"
+
+
+def test_name_hit_is_still_reported_when_the_cited_code_is_not_found(live, monkeypatch):
+    db = _old_sand_db()
+    monkeypatch.setattr(
+        endpoints, "discover_live",
+        lambda **kwargs: discover_live(factory=_factory(csres=Source(records=[])), **kwargs),
+    )
+    response = endpoints.verify_standard(VerifyRequest(code="GB/T 14684-2011", name="建筑用砂"), db)
+    assert response.match_type == "code_mismatch"
+    assert response.status == StandardStatus.UNKNOWN
+    assert response.canonical_code == "GB/T 14684-2001"
+
+
+def test_name_fallback_notes_when_sources_could_not_check_the_code(live, monkeypatch):
+    db = _old_sand_db()
+    csres = Source(error=SourceUnavailable("您无权访问", source="csres"))
+    monkeypatch.setattr(
+        endpoints, "discover_live",
+        lambda **kwargs: discover_live(factory=_factory(csres=csres), **kwargs),
+    )
+    response = endpoints.verify_standard(VerifyRequest(code="GB/T 14684-2011", name="建筑用砂"), db)
+    assert response.match_type == "code_mismatch"
+    assert "来源暂不可用" in response.message

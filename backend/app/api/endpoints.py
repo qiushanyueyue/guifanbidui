@@ -457,29 +457,49 @@ def _series(code: str | None) -> tuple[str, str] | None:
     return (parsed.prefix.replace("/T", ""), parsed.serial) if parsed is not None else None
 
 
+def _cites(code: str | None, row) -> bool:
+    """Whether a cited code names this record (a year-less code cites the series)."""
+
+    wanted = parse_standard_code(code)
+    actual = parse_standard_code(row.normalized_code or row.code)
+    if wanted is None or actual is None:
+        return False
+    return _series(code) == _series(row.normalized_code or row.code) and (
+        not wanted.year or wanted.year == actual.year
+    )
+
+
 def _resolve_local(db: Session, repo, request: VerifyRequest):
-    """Return (standard, candidates); candidates are set only when the choice is ambiguous."""
+    """Return (standard, candidates, name_fallback).
+
+    ``candidates`` is set only when the choice is ambiguous. ``name_fallback`` is
+    a name hit that is not the cited code: the code itself is looked up at the
+    sources first, and the fallback is used only if that finds nothing.
+    """
 
     standard = repo.get_by_code(db, request.code) if request.code else None
     if standard is not None:
-        return standard, []
+        return standard, [], None
     wanted_name = normalized_name(request.name)
     series = repo.code_candidates(db, request.code) if request.code else []
     if len(series) > 1:
         named = [row for row in series if wanted_name and normalized_name(row.name) == wanted_name]
-        return (named[0], []) if len(named) == 1 else (None, series)
+        return (named[0], [], None) if len(named) == 1 else (None, series, None)
     if not request.name:
-        return None, []
+        return None, [], None
     matches = _distinct_standards(repo.search(db, request.name, limit=5))
-    if len(matches) <= 1:
-        return (matches[0] if matches else None), []
+    if not matches:
+        return None, [], None
+    if not request.code:
+        return (matches[0], [], None) if len(matches) == 1 else (None, matches, None)
     wanted_series = _series(request.code)
-    if wanted_series is not None:
-        same_series = [row for row in matches if _series(row.normalized_code or row.code) == wanted_series]
-        # With a code the matcher reports any identity difference, so the first
-        # name hit stays acceptable when the series does not single one out.
-        return (same_series[0] if len(same_series) == 1 else matches[0]), []
-    return None, matches
+    same_series = [row for row in matches if _series(row.normalized_code or row.code) == wanted_series]
+    # With a code the matcher reports any identity difference, so the first
+    # name hit stays acceptable when the series does not single one out.
+    chosen = same_series[0] if len(same_series) == 1 else matches[0]
+    if _cites(request.code, chosen):
+        return chosen, [], None
+    return None, [], chosen
 
 
 def _unresolved_response(request: VerifyRequest, match_type: str, message: str, candidates=()) -> VerifyResponse:
@@ -517,7 +537,7 @@ def _live_lookup(db: Session, key: str | None, run, trace: LookupTrace | None = 
 @router.post("/v1/verify", response_model=VerifyResponse)
 def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     repo = _repo(db)
-    standard, candidates = _resolve_local(db, repo, request)
+    standard, candidates, name_fallback = _resolve_local(db, repo, request)
     if candidates:
         listing = "、".join(f"{row.code}（{status_label(normalize_status(row.status))}）" for row in candidates)
         return _unresolved_response(
@@ -546,6 +566,12 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
             db, lookup_key(code=request.code, name=request.name), discover, discovery_trace,
         )
         standard = discovered_holder[0] if discovered_holder else None
+    source_note = ""
+    if standard is None and name_fallback is not None:
+        # The cited code was not found; report the name hit as a code mismatch.
+        standard = name_fallback
+        if discovery_outcome in FAILURE_OUTCOMES:
+            source_note = "；来源暂不可用，未能核实引用编号"
     if standard is None:
         if discovery_outcome == "ambiguous":
             listing = "、".join(discovery_trace.ambiguous) or "多个年份版本"
@@ -575,10 +601,11 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
     decision = assess_standard_match(
         input_code=request.code, input_name=request.name, standard=standard, replaced_by=result.replaced_by,
     )
+    message = decision.message + source_note
     result.match_type = decision.match_type
     result.confidence = decision.confidence
     result.recommended_citation = decision.recommended_citation
-    result.message = decision.message
+    result.message = message
     return VerifyResponse(
         input_code=request.code,
         canonical_code=result.normalized_code or result.code,
@@ -594,7 +621,7 @@ def verify_standard(request: VerifyRequest, db: Session = Depends(get_db)):
         match_type=decision.match_type,
         confidence=decision.confidence,
         recommended_citation=decision.recommended_citation,
-        message=decision.message,
+        message=message,
         result=result,
     )
 
