@@ -340,3 +340,12 @@
 - result: 查询时核验原先把 `replaces` 与 `replaced_by` 用 `"; "` 拼接写入暂存，丢失方向；GB 50157-2003 因此存为 `GB 50157-1992; GB 50157-2013`，重建误判为 2003 版替代 2013 版，自 2026-10-31 起阻塞全部定时发布。现改写为 CSRES 原文格式 `A ;被 B 代替`。对历史上无方向词的查询时暂存行，“替代”目标若晚于本规范年份则不建边、记为 `relation_direction_unknown` 待复核，不推断方向；其他来源的无方向文本仍由质量门拦截。
 - evidence: 后端 231 项通过（新增 4 项）；在种子数据中注入与生产相同的暂存行，旧代码重建 `rolled_back` 且报同一对关系，新代码 `committed`、无环无反向年代。
 - remaining_risk: 未部署；生产库中是否还有其他阻塞项要等下一次定时运行确认。
+
+## 2026-11-11 定时发布恢复
+
+- event_id: `2026-11-11-publish-unblocked`
+- status: production_verified
+- scope: [PR #18](https://github.com/qiushanyueyue/guifanbidui/pull/18)（`1e5c058`）上线后，手动触发 standards-daily run 42971211628。
+- result: 发布质量门通过并提交（`publication=committed`，无环、无反向年代），自 2026-10-31 起积压的暂存证据一并发布。公开数据 1865 条：1513 current、23 upcoming、209 abolished、120 unknown、0 conflict；unknown_rate 0.0643（此前 384 条、约 21%）。本批 CSRES found=25、failed=0。
+- evidence: 工作流三步全部 success；公网 `/api/stats`、`/api/health`。
+- remaining_risk: unknown_rate 仍高于 5% 健康阈值，data 仍为 degraded；未解决隔离记录 910 条（含新增的 `relation_direction_unknown` 复核项），待按原因分类复核。

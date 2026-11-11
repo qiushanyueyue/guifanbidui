@@ -86,13 +86,12 @@
 
 ## 2026-11-11 发布质量门运行状态
 
-- as_of: `2026-11-11T13:01:17+08:00`
-- verification: `production_workflow_logs_verified`
-- evidence: standards-daily run 42794322896 等。
+- as_of: `2026-11-11T14:27:28+08:00`
+- verification: `production_workflow_and_api_verified`
+- evidence: standards-daily run 42971211628（手动触发，`publication=committed`）；公网 `/api/stats`、`/api/health`。
 
-- 质量门（ADR-0007）自 2026-10-31 起生效，每日发布均为 `rolled_back`，定时核验的新证据只暂存。查询时发现与复核仍直接写入公开数据。
-- 阻塞原因：GB 50157-2013 ↔ GB 50157-2003 的环与反向年代，原始文本 `GB 50157-1992; GB 50157-2013` 无方向词被误解析。修复前定时发布持续阻塞。
-- 2026-11-11 已定位根因：查询时核验写入关系证据时丢失方向（不是 CSRES 原文）。修复已实现并测试（写入保留方向；历史无方向行不再生成反向边），未部署。
+- 关系方向修复（PR #18，`1e5c058`）上线后定时发布恢复，2026-10-31 起积压的证据已发布。
+- 公开 1865 条：1513 current、23 upcoming、209 abolished、120 unknown；unknown_rate 0.0643，data 仍为 degraded（阈值 5%）。未解决隔离记录 910 条。
 
 ## 当前风险与未验证项
 
