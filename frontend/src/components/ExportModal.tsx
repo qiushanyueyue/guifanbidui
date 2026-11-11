@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './StandardDetailModal.css'; // Reuse modal styles or create new one
 
-import { api, isInactiveStatus, type StandardInfo, type SearchResult } from '../api';
+import { api, isInactiveStatus, isMatchedResult, STATUS_NOT_TRANSFERABLE, type LookupState, type StandardInfo } from '../api';
 
 interface ExportModalProps {
     isOpen: boolean;
     onClose: () => void;
     standards: StandardInfo[];
-    resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>;
+    resultsMap: Record<string, LookupState>;
     getResultKey: (standard: StandardInfo) => string;
 }
 
@@ -30,12 +30,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
 
         standards.forEach((std) => {
             const result = resultsMap[getResultKey(std)];
-            const hasMatch = result && typeof result === 'object';
+            const hasMatch = isMatchedResult(result);
 
             // Unknown/conflict records must not be presented as verified
             // current citations. Abolished/replaced records are also omitted.
             const isInactive = hasMatch && isInactiveStatus(result.status);
-            const isUnverified = hasMatch && ['unknown', 'conflict'].includes(result.status);
+            const isUnverified = hasMatch && (
+                ['unknown', 'conflict'].includes(result.status)
+                || STATUS_NOT_TRANSFERABLE.includes(result.match_type ?? 'unknown')
+            );
             const isUnmatched = !hasMatch || isInactive || isUnverified;
 
             // Strict 100% check:
@@ -143,7 +146,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, stand
                                 <tbody>
                                     {standards.map((std, i) => {
                                         const result = resultsMap[getResultKey(std)];
-                                        const hasMatch = result && typeof result === 'object';
+                                        const hasMatch = isMatchedResult(result);
 
                                         const isAbolished = hasMatch && isInactiveStatus(result.status);
 

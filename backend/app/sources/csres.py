@@ -123,7 +123,11 @@ def parse_csres_search_html(html: str, *, base_url: str = BASE_URL) -> list[Sour
             continue
         data_rows += 1
         parsed_code = parse_standard_code(value("code"))
-        code = parsed_code.normalized if parsed_code else ""
+        if parsed_code is None:
+            # CSRES mixes non-standard items (e.g. books with an ISBN) into the
+            # result table; skip them. A table with no valid row still fails below.
+            continue
+        code = parsed_code.normalized
         name = value("name")
         if not code or not name or len(code) > 120:
             raise ParseError("CSRES result row has no valid identity", source="csres")

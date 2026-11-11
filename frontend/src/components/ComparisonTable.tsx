@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api, isInactiveStatus, statusLabel, type StandardInfo, type SearchResult, type Stats } from '../api';
+import { api, isInactiveStatus, isMatchedResult, isUnresolvedLookup, STATUS_NOT_TRANSFERABLE, statusLabel, type LookupState, type StandardInfo, type SearchResult, type Stats } from '../api';
 import { StandardDetailModal } from './StandardDetailModal';
 import { FeedbackModal } from './FeedbackModal';
 import { openCsresSearch } from '../utils/csres';
@@ -21,7 +21,7 @@ const formatDataUpdatedAt = (value: string | null): string => {
 
 interface ComparisonTableProps {
     standards: StandardInfo[];
-    resultsMap: Record<string, SearchResult | null | 'loading' | 'error' | 'not_found'>; // New Prop
+    resultsMap: Record<string, LookupState>; // New Prop
     onCheckSingle: (code: string, name?: string, edition?: string | null, resultKey?: string) => Promise<void>; // New Prop
     getResultKey: (standard: StandardInfo) => string;
     onClear?: () => void;
@@ -105,16 +105,17 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
         .filter(({ result }) => {
             if (filter === 'all') return true;
             if (filter === 'not_found') return result === 'not_found';
-            if (!result || typeof result !== 'object') return filter === 'issues';
+            if (!isMatchedResult(result)) return filter === 'issues';
             if (filter === 'obsolete') return ['obsolete', 'replaced'].includes(result.match_type || '') || isInactiveStatus(result.status);
-            if (filter === 'update') return ['revision_missing', 'code_type_mismatch', 'code_mismatch', 'name_mismatch'].includes(result.match_type || '');
+            if (filter === 'update') return ['revision_missing', 'code_type_mismatch', 'code_mismatch', 'name_mismatch', 'code_incomplete'].includes(result.match_type || '');
             return result.match_type !== 'exact';
         });
     const batchCounts = standards.reduce(
         (counts, standard) => {
             const result = resultsMap[getResultKey(standard)];
             if (result === 'not_found') counts.notFound += 1;
-            else if (result && typeof result === 'object') {
+            else if (isUnresolvedLookup(result)) counts.issues += 1;
+            else if (isMatchedResult(result)) {
                 if (result.match_type === 'exact') counts.exact += 1;
                 else if (['obsolete', 'replaced'].includes(result.match_type || '') || isInactiveStatus(result.status)) counts.obsolete += 1;
                 else counts.issues += 1;
@@ -270,7 +271,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
 interface StandardRowControlledProps {
     index: number;
     standard: StandardInfo;
-    resultStatus: SearchResult | null | 'loading' | 'error' | 'not_found' | undefined;
+    resultStatus: LookupState | undefined;
     onCheck: () => void;
     onViewDetail: (result: SearchResult) => void;
     onRemove: () => void;
@@ -279,7 +280,8 @@ interface StandardRowControlledProps {
 }
 
 const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, standard, resultStatus, onCheck, onViewDetail, onRemove, onUpdate, onFeedback }) => {
-    const result = (typeof resultStatus === 'object') ? resultStatus : null;
+    const result = isMatchedResult(resultStatus) ? resultStatus : null;
+    const unresolved = isUnresolvedLookup(resultStatus) ? resultStatus : null;
     const isLoading = resultStatus === 'loading';
     const isError = resultStatus === 'error';
 
@@ -293,12 +295,18 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
         replaced: '被替代',
         unknown: '暂无法确认',
         source_conflict: '来源冲突',
+        code_incomplete: '编号缺少年份',
+        version_unconfirmed: '版本待确认',
+        ambiguous: '多个候选',
+        source_unavailable: '来源暂不可用',
     };
-    const matchType = result?.match_type || 'unknown';
+    const matchType = result?.match_type || unresolved?.match_type || 'unknown';
     const isExact = matchType === 'exact';
-    const matchLabel = result ? (matchLabels[matchType] || '暂无法确认') : '-';
+    const matchLabel = (result || unresolved) ? (matchLabels[matchType] || '暂无法确认') : '-';
     const isIssue = !isExact;
-    const isConsistent = isExact ? matchLabel : (result?.message || matchLabel);
+    const isConsistent = isExact ? matchLabel : (result?.message || unresolved?.message || matchLabel);
+    // The cited standard's status is unknown when the record is another standard or version.
+    const displayStatus = result && STATUS_NOT_TRANSFERABLE.includes(result.match_type ?? 'unknown') ? 'unknown' : result?.status;
     const revisionMismatch = matchType === 'revision_missing'
         || isConsistent.includes('版本')
         || isConsistent.includes('修订版')
@@ -306,11 +314,11 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
     const csresUrl = result?.sources?.find((source) => source.name === 'csres' && source.url)?.url;
     const soujianzhuKeyword = result?.name || standard.name || standard.code;
     const soujianzhuSearchUrl = `https://www.soujianzhu.cn/Search/SouGuifan.aspx?skey=${encodeURIComponent(soujianzhuKeyword)}`;
-    const statusTone = result?.status === 'current'
+    const statusTone = displayStatus === 'current'
         ? { background: '#f0fdf4', color: '#15803d' }
-        : ['upcoming', 'partially_amended'].includes(result?.status || '')
+        : ['upcoming', 'partially_amended'].includes(displayStatus || '')
             ? { background: '#fffbeb', color: '#b45309' }
-            : result?.status === 'unknown'
+            : displayStatus === 'unknown'
                 ? { background: '#f3f4f6', color: '#6b7280' }
                 : { background: '#fef2f2', color: '#b91c1c' };
 
@@ -391,6 +399,12 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         <button onClick={onCheck} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px' }}>重试</button>
                     </div>
                 )}
+                {unresolved && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ color: '#b45309', fontSize: '12px' }}>{unresolved.message}</span>
+                        <button onClick={onCheck} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px' }}>重试</button>
+                    </div>
+                )}
                 {!resultStatus && standard.code && (
                     <button onClick={onCheck} style={{ color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>点击查询</button>
                 )}
@@ -433,10 +447,12 @@ const StandardRowControlled: React.FC<StandardRowControlledProps> = ({ index, st
                         borderRadius: '2px',
                         fontSize: '12px'
                     }}>
-                        {result.business_conclusion || result.status_label || statusLabel(result.status)}
+                        {displayStatus !== result.status
+                            ? statusLabel(displayStatus)
+                            : (result.business_conclusion || result.status_label || statusLabel(result.status))}
                     </span>
                 )}
-                {resultStatus === 'not_found' && (
+                {(resultStatus === 'not_found' || unresolved) && (
                     <span style={{
                         background: '#f3f4f6',
                         color: '#6b7280',

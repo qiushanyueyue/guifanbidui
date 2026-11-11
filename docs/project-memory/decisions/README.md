@@ -22,3 +22,4 @@ ADR 用于记录会影响后续工作的长期取舍，而不是记录每次代�
 - [`ADR-0005-csres-coverage-and-verification-rotation.md`](ADR-0005-csres-coverage-and-verification-rotation.md) — CSRES 主覆盖、其他来源分工与存量复核稳定轮转。
 - [`ADR-0006-live-lookup-budget-and-negative-cache.md`](ADR-0006-live-lookup-budget-and-negative-cache.md) — 查询时联网复核总时限、负缓存与前端过期结果丢弃。
 - [`ADR-0007-transactional-publish-gate.md`](ADR-0007-transactional-publish-gate.md) — 发布质量门在提交前生效，失败整体回滚。
+- [`ADR-0008-source-failure-and-ambiguity-semantics.md`](ADR-0008-source-failure-and-ambiguity-semantics.md) — 查新区分来源失败、确实没有与多候选；编号缺年份与仅名称命中旧版的判定。

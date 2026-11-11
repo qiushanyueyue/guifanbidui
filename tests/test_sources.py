@@ -187,3 +187,11 @@ def test_soujianzhu_verification_page_is_source_unavailable():
     )
     with pytest.raises(SourceUnavailable):
         parse_soujianzhu_recent_html(html)
+
+
+def test_csres_book_rows_are_skipped_instead_of_failing_the_page():
+    html = """<table><tr><th>标准编号</th><th>标准名称</th><th>状态</th></tr>
+    <tr><td>978-7-5066-6722-7</td><td>GB/T 14684-2011《建设用砂》解读</td><td></td></tr>
+    <tr><td><a href="/detail/1.html">GB/T 14684-2011</a></td><td>建设用砂</td><td>现行</td></tr></table>"""
+    records = parse_csres_search_html(html)
+    assert [(record.code, record.name) for record in records] == [("GB/T 14684-2011", "建设用砂")]

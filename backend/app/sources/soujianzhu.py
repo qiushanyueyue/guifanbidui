@@ -16,7 +16,7 @@ import urllib.parse
 from bs4 import BeautifulSoup
 
 from app.services.standard_normalizer import normalize_standard_code, parse_edition, split_standard_reference
-from app.sources.base import HttpSource, ParseError, SourceRecord, SourceUnavailable
+from app.sources.base import HttpSource, ParseError, SourceNotConfigured, SourceRecord, SourceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class SoujianzhuSource(HttpSource):
     def search(self, query: str) -> list[SourceRecord]:
         endpoint = os.getenv("SOUJIANZHU_SEARCH_URL", "").strip()
         if not endpoint:
-            raise SourceUnavailable("SOUJIANZHU_SEARCH_URL is not configured", source=self.name)
+            raise SourceNotConfigured("SOUJIANZHU_SEARCH_URL is not configured", source=self.name)
         response = self._request("GET", endpoint, params={"q": query})
         records = parse_soujianzhu_recent_html(self.response_text(response), base_url=self.base_url)
         return [self.normalize(record) for record in records]
@@ -159,7 +159,7 @@ class SoujianzhuSource(HttpSource):
     def fetch_recent(self, limit: int = 100) -> list[SourceRecord]:
         endpoint = os.getenv("SOUJIANZHU_RECENT_URL", "").strip()
         if not endpoint:
-            raise SourceUnavailable("SOUJIANZHU_RECENT_URL is not configured", source=self.name)
+            raise SourceNotConfigured("SOUJIANZHU_RECENT_URL is not configured", source=self.name)
         started = time.monotonic()
         response = self._request("GET", endpoint, params={"limit": min(limit, 500)})
         try:
