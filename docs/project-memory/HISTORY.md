@@ -331,3 +331,12 @@
 - evidence: 两次 main CI 与 Vercel Production success；公网首页 200、health ok，总数 1858、unknown 384。
 - finding: 质量门自 2026-10-31 起使每日发布全部回滚（如 run 42794322896 `publication=rolled_back`）。两项异常为同一对：GB 50157-2013 ↔ GB 50157-2003 的环与反向年代，原始关系文本 `GB 50157-1992; GB 50157-2013` 无方向词，被解析为 2003 版替代 2013 版。
 - remaining_risk: GB/T 9286 生产仍返回 `not_found`（3.3 秒、未联网），推测为部署前写入的 `miss` 负缓存，未核实；关系解析修复前定时发布持续被阻塞；88 条完整清单未做前后对比。
+
+## 2026-11-11 修复查询时关系证据丢失方向
+
+- event_id: `2026-11-11-relation-direction`
+- status: tested
+- scope: `persist_live_verification` 的关系证据写入、`publish_staging` 的关系重建。补充 [ADR-0007](decisions/ADR-0007-transactional-publish-gate.md)。
+- result: 查询时核验原先把 `replaces` 与 `replaced_by` 用 `"; "` 拼接写入暂存，丢失方向；GB 50157-2003 因此存为 `GB 50157-1992; GB 50157-2013`，重建误判为 2003 版替代 2013 版，自 2026-10-31 起阻塞全部定时发布。现改写为 CSRES 原文格式 `A ;被 B 代替`。对历史上无方向词的查询时暂存行，“替代”目标若晚于本规范年份则不建边、记为 `relation_direction_unknown` 待复核，不推断方向；其他来源的无方向文本仍由质量门拦截。
+- evidence: 后端 231 项通过（新增 4 项）；在种子数据中注入与生产相同的暂存行，旧代码重建 `rolled_back` 且报同一对关系，新代码 `committed`、无环无反向年代。
+- remaining_risk: 未部署；生产库中是否还有其他阻塞项要等下一次定时运行确认。
