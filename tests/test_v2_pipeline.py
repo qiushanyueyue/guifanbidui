@@ -469,3 +469,70 @@ def test_missing_relation_text_is_not_a_replacement_disagreement():
     row = db.query(StandardV2Model).one()
     assert row.status == "abolished"
     assert row.verification_level == "cross_verified"
+
+
+def _gb50157_edges(relation_text, raw_text):
+    from app.models.models import StandardV2RelationModel
+    from app.services.data_quality import validate_relation_edges
+
+    db = _db()
+    for code, name in [
+        ("GB 50157-1992", "地下铁道设计规范"),
+        ("GB 50157-2003", "地铁设计规范"),
+        ("GB 50157-2013", "地铁设计规范"),
+    ]:
+        stage_record(db, **_record(raw_code=code, raw_name=name, source_url=f"https://example.test/{code}"))
+    stage_record(
+        db,
+        **_record(
+            source_name="csres",
+            raw_code="GB 50157-2003",
+            raw_name="地铁设计规范",
+            source_url="https://example.test/csres/62113",
+            raw_status="废止",
+            raw_text=raw_text,
+            raw_relation_text=relation_text,
+        ),
+    )
+    publish_staging(db)
+    by_id = {row.id: row.base_code for row in db.query(StandardV2Model).all()}
+    years = {row.id: row.standard_year for row in db.query(StandardV2Model).all()}
+    rows = db.query(StandardV2RelationModel).all()
+    edges = {(row.relation_type, by_id[row.source_standard_id], by_id[row.target_standard_id]) for row in rows}
+    old_new = [
+        (row.target_standard_id, row.source_standard_id) if row.relation_type == "replaces"
+        else (row.source_standard_id, row.target_standard_id)
+        for row in rows
+    ]
+    quality = validate_relation_edges(old_new, known_ids=set(by_id), standard_years=years)
+    return db, edges, quality
+
+
+def test_legacy_direction_less_query_time_relation_does_not_reverse_chronology():
+    # Production blocker since 2026-10-31: a query-time row stored "replaces" and
+    # "replaced_by" joined by "; ", so 2003 appeared to replace 2013.
+    db, edges, quality = _gb50157_edges("GB 50157-1992; GB 50157-2013", "query-time verification")
+    assert edges == {("replaces", "GB 50157-2003", "GB 50157-1992")}
+    assert quality.is_publishable
+    issue = db.query(QuarantinedStandardModel).filter_by(reason_code="relation_direction_unknown").one()
+    assert issue.reason_detail == "replaces: GB 50157-2013"
+
+
+def test_query_time_relation_now_keeps_both_directions():
+    from app.sync.v2_pipeline import relation_evidence_text
+
+    text = relation_evidence_text("GB 50157-1992", "GB 50157-2013")
+    _db_, edges, quality = _gb50157_edges(text, "query-time verification")
+    assert edges == {
+        ("replaces", "GB 50157-2003", "GB 50157-1992"),
+        ("replaced_by", "GB 50157-2003", "GB 50157-2013"),
+    }
+    assert quality.is_publishable
+
+
+def test_direction_less_text_from_other_sources_is_left_to_the_quality_gate():
+    # Only the known lossy query-time writer is tolerated; other evidence keeps
+    # failing the gate so new parser problems stay visible.
+    _db_, edges, quality = _gb50157_edges("GB 50157-1992; GB 50157-2013", "公开目录元数据")
+    assert ("replaces", "GB 50157-2003", "GB 50157-2013") in edges
+    assert not quality.is_publishable

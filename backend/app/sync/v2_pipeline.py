@@ -27,8 +27,26 @@ from app.services.standard_normalizer import (
     parse_standard_edition,
     parse_standard_code,
 )
+from app.services.data_quality import normalized_year
 from app.sources.csres import has_mandatory_clause_repeal, parse_csres_replacement_text
 from app.timeutil import utc_now
+
+QUERY_TIME_RAW_TEXT = "query-time verification"
+
+
+def relation_evidence_text(replaces: str | None, replaced_by: str | None) -> str | None:
+    """Encode both directions in the CSRES prose form the relation parser reads."""
+
+    parts = [replaces.strip()] if replaces and replaces.strip() else []
+    if replaced_by and replaced_by.strip():
+        parts.append(f"被 {replaced_by.strip()} 代替")
+    return " ;".join(parts) or None
+
+
+def _is_lossy_query_time_relation(evidence: StagingStandardModel) -> bool:
+    # Before 2026-11-11, query-time checks joined "replaces" and "replaced_by"
+    # with "; ", so such rows carry no direction (e.g. "GB 50157-1992; GB 50157-2013").
+    return evidence.raw_text == QUERY_TIME_RAW_TEXT and "被" not in (evidence.raw_relation_text or "")
 
 
 @dataclass(frozen=True)
@@ -421,6 +439,38 @@ def publish_staging(db: Session, *, commit: bool = True) -> PublishReport:
         if has_mandatory_clause_repeal(evidence.raw_relation_text):
             source_standard.mandatory_clause_status = "partially_repealed"
         replaces, replaced_by = parse_csres_replacement_text(evidence.raw_relation_text)
+        if _is_lossy_query_time_relation(evidence):
+            # A standard cannot replace a newer one. In a direction-less legacy
+            # row such a code was a successor; its direction is not inferred,
+            # the edge is dropped and kept for review.
+            source_year = normalized_year(source_standard.standard_year)
+            undirected = [
+                code for code in replaces
+                if source_year is not None
+                and (parsed_target := parse_standard_code(code)) is not None
+                and (normalized_year(parsed_target.year) or 0) > source_year
+            ]
+            replaces = [code for code in replaces if code not in undirected]
+            for target_code in undirected:
+                detail = f"replaces: {target_code}"
+                already = (
+                    db.query(QuarantinedStandardModel)
+                    .filter(QuarantinedStandardModel.staging_id == evidence.id)
+                    .filter(QuarantinedStandardModel.reason_code == "relation_direction_unknown")
+                    .filter(QuarantinedStandardModel.reason_detail == detail)
+                    .filter(QuarantinedStandardModel.resolved_at.is_(None))
+                    .first()
+                )
+                if already is None:
+                    db.add(
+                        QuarantinedStandardModel(
+                            staging_id=evidence.id,
+                            normalized_code=source_standard.base_code,
+                            normalized_name=source_standard.normalized_name,
+                            reason_code="relation_direction_unknown",
+                            reason_detail=detail,
+                        )
+                    )
         for relation_type, codes in (("replaces", replaces), ("replaced_by", replaced_by)):
             for target_code in codes:
                 target_standard = next(
